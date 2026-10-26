@@ -4,7 +4,7 @@
 RipperPS is a fully featured disk dumping/ripping app for your jailbroken PS5. Using your an official PS5 drive (built-in or separate) or a compatible USB disk drive, you can rip almost any CD, DVD, and BD disk for all sorts of media directly onto your PS5. 
 Anything that your drive(s) can physically read and decode works! 
 
-This is a project that I've been working on very slowly in the background while RommPS (check it out) was being developed as I learned how the internal BD drive and externals would work. The PS5 has a very capable drive built-in, and with drives becoming rarer day-by-day, as well as more popular due to the physical media boom, making use of your PS5 for ripping is a no brainer. This was probably the hardest project I've taken on so far, and I learned an immense amount about how all these disk formats work, and a lot about what happens behind the scenes in your good ol' disc drive.
+This is a project that I've been working on very slowly in the background while RommPS [check it out](https://github.com/s0liton/RommPS) was being developed as I learned how the internal BD drive and externals would work. The PS5 has a very capable drive built-in, and with drives becoming rarer day-by-day, as well as more popular due to the physical media boom, making use of your PS5 for ripping is a no brainer. This was probably the hardest project I've taken on so far, and I learned an immense amount about how all these disk formats work, and a lot about what happens behind the scenes in your good ol' disc drive.
 
 # Supported Disks
 
