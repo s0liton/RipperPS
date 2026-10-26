@@ -25,7 +25,7 @@ This is a project that I've been working on very slowly in the background while 
 | Gamecube | Supported | External (physically) |
 | Wii | Supported | Internal & External |
 | Wii U | Supported | Omni/Kreon Drive |
-| Dreamcast | TBD | |
+| Dreamcast | TBD | Omni/Kreon Drive |
 | Sega CD | TBD | |
 | Sega Saturn | TBD | |
 | 3DO | TBD | |
