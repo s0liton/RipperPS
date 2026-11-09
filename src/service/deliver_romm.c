@@ -536,7 +536,7 @@ int romm_pair_start(const char *url, int tls_verify, char *err, size_t en) {
   device_identifier(id, sizeof(id));
   body = cJSON_CreateObject();
   cJSON_AddStringToObject(body, "client_device_identifier", id);
-  cJSON_AddStringToObject(body, "name", "ripper on PS5");
+  cJSON_AddStringToObject(body, "name", "RipperPS on PS5");
   cJSON_AddStringToObject(body, "client", "ripper");
   cJSON_AddStringToObject(body, "platform", "PS5");
   cJSON_AddStringToObject(body, "client_version", RIPPER_VERSION);

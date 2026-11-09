@@ -834,9 +834,9 @@ class RipperPS final : public app::Concept
         float left_x = 1824;
         std::string where;
         if (s.reachable)
-            where = "ripper " + s.version + (s.ip.empty() ? "" : "  \xC2\xB7  " + s.ip + ":" + std::to_string(s.port));
+            where = "RipperPS " + s.version + (s.ip.empty() ? "" : "  \xC2\xB7  " + s.ip + ":" + std::to_string(s.port));
         else
-            where = !s.known ? "Connecting" : app_.payload_starting() ? "Starting ripper" : "ripper isn't running";
+            where = !s.known ? "Connecting" : app_.payload_starting() ? "Starting the service" : "The service isn't running";
         left_x -= ui::text(list, fonts.regular, fonts.regular.font->fit(where, 22, 640), left_x, 90, 22, L.muted,
                            gfx::Align::right);
         list.circle(left_x - 24, 83, 7, s.reachable ? L.success : app_.payload_starting() ? L.warning : L.danger);
@@ -856,12 +856,12 @@ class RipperPS final : public app::Concept
         const float x = panel.x + 72;
         const bool starting = app_.payload_starting() || (s.known && app_.payload_error().empty());
         ui::text(list, fonts.display,
-                 !s.known ? "Connecting to ripper" : starting ? "Starting ripper" : "ripper isn't running", x,
+                 !s.known ? "Connecting" : starting ? "Starting the background service" : "The background service isn't running", x,
                  panel.y + 120, 56, L.panel_text);
         ui::paragraph(list, fonts.regular,
                       starting ? "This takes a few seconds."
-                               : "RipperPS couldn't start ripper. Press Cross to try again, or load ripper.elf "
-                                 "with your payload loader.",
+                               : "RipperPS couldn't start its background service. Press Cross to try again, or send "
+                                 "ripper.elf to your payload loader.",
                       x, panel.y + 190, 28, 1060, 42, L.panel_muted, 4);
         if (!starting && !app_.payload_error().empty())
             ui::text(list, fonts.regular, fonts.regular.font->fit(ripper::plain_text(app_.payload_error()), 22, 1060),

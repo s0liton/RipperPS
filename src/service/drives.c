@@ -18,6 +18,7 @@
 #include "ripper/rip.h"
 #include "ripper/udf.h"
 #include "ripper/util.h"
+#include "drivetest.h"
 #include "settings.h"
 #include "svc.h"
 
@@ -60,6 +61,8 @@ struct slot {
   double install_rate;           // bytes a second the install copies, smoothed
   uint64_t install_moved_at;     // when its count last moved (svc_mono_ms)
   int64_t install_told;          // the last notification of how far it is (svc_now)
+  char report_dir[SVC_PATH];     // the last disc report's folder ...
+  unsigned report_seq;           // ... and the disc it's of
 };
 
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -116,7 +119,7 @@ static cJSON *make_offer(const struct slot *s, const char **why_not) {
 
   *why_not = NULL;
   if (!sys) {
-    *why_not = "ripper doesn't know this kind of disc";
+    *why_not = "RipperPS doesn't know this kind of disc";
     return NULL;
   }
   offer = cJSON_CreateObject();
@@ -471,8 +474,17 @@ static void report_disc(struct slot *s, struct rip_reader *reader, const struct 
                         const char *outcome, const cJSON *offer) {
   struct disc_report r = {s->info.id, s->info.label, &s->drive, &s->t, reader,
                           disc,       profile,       outcome,   offer, plat_drive_mount(s->info.id)};
+  char dir[SVC_PATH];
+  unsigned seq;
 
-  disc_report_write(&r);
+  pthread_mutex_lock(&g_lock);
+  seq = s->disc_seq;
+  pthread_mutex_unlock(&g_lock);
+  disc_report_write(&r, dir, sizeof(dir));
+  pthread_mutex_lock(&g_lock);
+  svc_str_copy(s->report_dir, sizeof(s->report_dir), dir);
+  s->report_seq = seq;
+  pthread_mutex_unlock(&g_lock);
 }
 
 // Reads what the disc is. Runs on the watcher's thread with the lock released.
@@ -550,6 +562,9 @@ static void auto_start(struct slot *s, unsigned seq) {
   char err[256];
   cJSON *req;
 
+  if (drivetest_holds(s->info.id)) {
+    return;  // a drive test takes every disc as it comes
+  }
   pthread_mutex_lock(&g_lock);
   req = s->disc_seq == seq && s->state == ST_READY && s->offer
             ? cJSON_Duplicate(cJSON_GetObjectItemCaseSensitive(s->offer, "suggestion"), 1)
@@ -1042,4 +1057,58 @@ void drives_dumped(const char *id, unsigned disc_seq) {
   if (eject) {
     drives_eject(id, err, sizeof(err));
   }
+}
+
+int drives_peek(const char *id, char *state, size_t sn, unsigned *disc_seq, int *busy) {
+  struct slot *s;
+
+  pthread_mutex_lock(&g_lock);
+  s = find(id);
+  if (s) {
+    svc_str_copy(state, sn, STATE_NAMES[s->state]);
+    *disc_seq = s->disc_seq;
+    *busy = s->busy;
+  }
+  pthread_mutex_unlock(&g_lock);
+  return s ? RIP_OK : RIP_ENOENT;
+}
+
+cJSON *drives_one_json(const char *id) {
+  cJSON *all = drives_json();
+  cJSON *d;
+  cJSON *out = NULL;
+
+  cJSON_ArrayForEach(d, all) {
+    if (!strcmp(jstr(d, "id", ""), id)) {
+      out = cJSON_Duplicate(d, 1);
+      break;
+    }
+  }
+  cJSON_Delete(all);
+  return out;
+}
+
+int drives_report_dir(const char *id, unsigned disc_seq, char *out, size_t n) {
+  struct slot *s;
+  int rc = RIP_ENOENT;
+
+  pthread_mutex_lock(&g_lock);
+  s = find(id);
+  if (s && s->report_seq == disc_seq && s->report_dir[0]) {
+    svc_str_copy(out, n, s->report_dir);
+    rc = RIP_OK;
+  }
+  pthread_mutex_unlock(&g_lock);
+  return rc;
+}
+
+void drives_busy_message(const char *id, const char *message) {
+  struct slot *s;
+
+  pthread_mutex_lock(&g_lock);
+  s = find(id);
+  if (s && s->busy) {
+    svc_str_copy(s->message, sizeof(s->message), message);
+  }
+  pthread_mutex_unlock(&g_lock);
 }

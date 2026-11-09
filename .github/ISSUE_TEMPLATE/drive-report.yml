@@ -1,0 +1,70 @@
+name: Drive test submission
+description: Send the results of RipperPS's drive test, so more drives and discs can be supported.
+title: "Drive report: "
+labels: ["test submission"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing! If you came from RipperPS's **Drive test** tab, most of this is filled in already.
+        Run the test from the **Drive test** tab in RipperPS's web UI (`http://<ps5-ip>:8790`) or in RipperPS. [How it works](../blob/main/docs/drive-test.md).
+  - type: input
+    id: drive
+    attributes:
+      label: Drive
+      description: As RipperPS saw it (vendor, model, firmware revision).
+      placeholder: HL-DT-ST BD-RE BP50NB40 1.00
+    validations:
+      required: true
+  - type: dropdown
+    id: firmware
+    attributes:
+      label: Firmware on the drive
+      description: What you know it runs, if anything was flashed.
+      options:
+        - Stock, never flashed
+        - Kreon
+        - OmniDrive
+        - LibreDrive (MK firmware)
+        - SpiralDrive
+        - Something else (say below)
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: firmware_seen
+    attributes:
+      label: What RipperPS found about the firmware
+  - type: input
+    id: enclosure
+    attributes:
+      label: Enclosure or USB adapter
+      description: The case or adapter the drive is in, if it isn't a ready-made USB drive. Some cut off what the drive says about itself.
+      placeholder: "Orico USB 3.0 SATA enclosure, or: none, it's a USB drive"
+  - type: input
+    id: reads
+    attributes:
+      label: What RipperPS thinks the drive reads
+  - type: textarea
+    id: discs
+    attributes:
+      label: Discs tried
+      description: One line a disc. The drive test fills this in.
+    validations:
+      required: true
+  - type: textarea
+    id: zip
+    attributes:
+      label: The drive test's zip
+      description: Drag `ripper-drivetest-....zip` here. It's in `/data/ripper/diag/` on the PS5 too.
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: Discs that wouldn't go in, odd noises, what you expected to work and didn't.
+  - type: input
+    id: version
+    attributes:
+      label: RipperPS version

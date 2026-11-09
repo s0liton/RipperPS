@@ -1,0 +1,69 @@
+name: Bug report
+description: Something broke or didn't work the way it should.
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: To reproduce
+      description: What you did, step by step.
+      placeholder: |
+        1. Put in ...
+        2. Picked ... as the format
+        3. Pressed Rip
+        4. See error
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What you expected to happen instead.
+  - type: input
+    id: disc
+    attributes:
+      label: Disc
+      description: What disc was in, if it matters.
+      placeholder: "Final Fantasy X (PS2, USA)"
+  - type: input
+    id: drive
+    attributes:
+      label: Drive
+      description: The built-in drive, or your USB drive's model.
+      placeholder: "Built-in, or ASUS BW-16D1HT"
+  - type: input
+    id: version
+    attributes:
+      label: RipperPS version
+      description: It's at the bottom of Settings in RipperPS, and at the top of the web UI.
+      placeholder: "0.2.0"
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware version
+      description: Which firmware version is your console on?
+      placeholder: "12.70"
+  - type: input
+    id: model
+    attributes:
+      label: PS5 hardware model
+      description: Which console revision do you have?
+      placeholder: "CFI-1215A"
+  - type: textarea
+    id: reports
+    attributes:
+      label: Reports
+      description: After it happens, open the web UI's Log tab, hit **Download reports** and drag the zip here. Screenshots help too.
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else

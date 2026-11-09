@@ -325,7 +325,7 @@ int main(void) {
       {"aes", test_aes},         {"hashes", test_hashes},         {"system_cnf", test_system_cnf},
       {"names", test_names},     {"sha256", test_sha256},         {"sfo", test_sfo},
       {"iso9660", test_iso9660}, {"ps3_layout", test_ps3_layout}, {"rip", test_rip_all},
-      {"formats", test_formats}, {"firmware", test_firmware},
+      {"formats", test_formats}, {"firmware", test_firmware},   {"identify", test_identify},
   };
   size_t i;
 

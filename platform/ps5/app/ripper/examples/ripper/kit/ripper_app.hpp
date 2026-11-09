@@ -226,12 +226,21 @@ struct Pairing {
   std::string token;  // handed over once, when it went through
 };
 
-// The drive test (/api/diagnose): what the drive is and how it reads, zipped
-// to send to whoever asked for it.
+// The drive test (/api/drivetest): a guided session, one disc after another,
+// that ends in a zip for the drive report form.
+struct TestDisc {
+  int n = 0;
+  std::string kind, title, outcome, result, said, signs;
+};
+
 struct DriveTest {
-  std::string state;  // idle, running, done, failed, cancelled
-  std::string drive, step, file, error, drive_name, disc, findings;
-  double done = 0, total = 0, commands = 0, answered = 0;
+  std::string state;  // idle, waiting, testing, finishing, done, failed
+  std::string drive, drive_label, drive_name, firmware, prompt, step, file, error;
+  double done = 0, total = 0;
+  std::vector<TestDisc> discs;
+  bool active() const {
+    return state == "waiting" || state == "testing" || state == "finishing";
+  }
 };
 
 // An installed PS4 or PS5 game, to dump (/api/games).
@@ -311,7 +320,10 @@ class App {
   }
   void start_drive_test(const std::string &drive);
   void refresh_drive_test();
-  void cancel_drive_test();
+  void finish_drive_test();
+  void discard_drive_test();
+  // What disc n of the test really is, as the person says.
+  void label_test_disc(int n, const std::string &said);
   bool games_loading() const {
     return games_busy_;
   }

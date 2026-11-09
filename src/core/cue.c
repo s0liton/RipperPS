@@ -178,7 +178,8 @@ static int parse_mode(const char *s, enum cd_track_mode *mode) {
     *mode = CD_MODE_AUDIO;
   } else if (strcmp(s, "MODE1/2352") == 0) {
     *mode = CD_MODE1;
-  } else if (strcmp(s, "MODE2/2352") == 0) {
+  } else if (strcmp(s, "MODE2/2352") == 0 || strcmp(s, "CDI/2352") == 0) {
+    // CDI/2352 is what some tools call a CD-i's mode 2 track.
     *mode = CD_MODE2;
   } else {
     return RIP_ERR;

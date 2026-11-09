@@ -31,7 +31,8 @@ struct disc_report {
   const char *mount_root;  // where the system mounted the disc, or NULL
 };
 
-void disc_report_write(const struct disc_report *r);
+// dir_out (may be NULL) gets the report's folder, or "" if none was written.
+void disc_report_write(const struct disc_report *r, char *dir_out, size_t dn);
 
 // The disc reports, the drive tests and ripper.log as one zip; NULL if it
 // couldn't be made. free() it.

@@ -729,7 +729,7 @@ int plat_game_dump(const char *title_id, const char *out_dir, plat_progress_fn p
   if (st.partial) {
     snprintf(err, en,
              "parts of %s were never installed on this console (other languages, most likely), and reading them "
-             "would hang it: ripper can't dump this game yet",
+             "would hang it: RipperPS can't dump this game yet",
              id);
     return RIP_ERR;
   }

@@ -15,7 +15,7 @@
 #include "bench.h"
 #include "catalog.h"
 #include "deliver.h"
-#include "diagnose.h"
+#include "drivetest.h"
 #include "disc_report.h"
 #include "drives.h"
 #include "jobs.h"
@@ -359,7 +359,7 @@ static cJSON *folders_json(const char *path, char *err, size_t en) {
     }
   }
   if (clean[0] != '/' || strstr(clean, "/..") || !inside || !svc_dir_exists(clean)) {
-    snprintf(err, en, "not a folder ripper can use");
+    snprintf(err, en, "not a folder RipperPS can use");
     cJSON_Delete(j);
     return NULL;
   }
@@ -578,8 +578,8 @@ static void route(struct request *r) {
         send_json(fd, 200, out);
         return;
       }
-    } else if (!strcmp(action, "diagnose")) {
-      rc = diagnose_start(id, err, sizeof(err));
+    } else if (!strcmp(action, "drivetest")) {
+      rc = drivetest_start(id, err, sizeof(err));
     } else if (!strcmp(action, "probe")) {
       cJSON *out = bench_probe(id, err, sizeof(err));
       if (out) {
@@ -604,27 +604,49 @@ static void route(struct request *r) {
     }
     return;
   }
-  // The drive test: status while it runs, then its zip.
-  if (is_get && !strcmp(r->path, "/api/diagnose")) {
-    send_json(fd, 200, diagnose_status());
+  // The drive test: a session a disc at a time, then its zip.
+  if (is_get && !strcmp(r->path, "/api/drivetest")) {
+    send_json(fd, 200, drivetest_status());
     return;
   }
-  if (is_post && !strcmp(r->path, "/api/diagnose/cancel")) {
-    diagnose_cancel();
+  if (is_post && !strcmp(r->path, "/api/drivetest/disc")) {
+    cJSON *j = body_json(r);
+    const cJSON *said = cJSON_GetObjectItemCaseSensitive(j, "said");
+    const cJSON *note = cJSON_GetObjectItemCaseSensitive(j, "note");
+    int rc = drivetest_label(jint(j, "n", 0), cJSON_GetStringValue(said), cJSON_GetStringValue(note), err,
+                             sizeof(err));
+    cJSON_Delete(j);
+    if (rc == RIP_OK) {
+      send_ok(fd);
+    } else {
+      send_error(fd, 400, err);
+    }
+    return;
+  }
+  if (is_post && !strcmp(r->path, "/api/drivetest/finish")) {
+    if (drivetest_finish(err, sizeof(err)) == RIP_OK) {
+      send_ok(fd);
+    } else {
+      send_error(fd, 400, err);
+    }
+    return;
+  }
+  if (is_post && !strcmp(r->path, "/api/drivetest/discard")) {
+    drivetest_discard();
     send_ok(fd);
     return;
   }
-  if (is_get && !strcmp(r->path, "/api/diagnose/file")) {
-    char name[160];
+  if (is_get && !strcmp(r->path, "/api/drivetest/file")) {
+    char name[200];
     size_t len = 0;
     char *data;
     qparam(r, "name", name, sizeof(name));
-    data = diagnose_file(name, &len);
+    data = drivetest_file(name, &len);
     if (data) {
       send_response(fd, 200, "application/zip", data, len);
       free(data);
     } else {
-      send_error(fd, 404, "no such diagnostic");
+      send_error(fd, 404, "no such drive test");
     }
     return;
   }

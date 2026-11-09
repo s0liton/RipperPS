@@ -1,0 +1,22 @@
+name: Question
+description: Not sure how something works, or whether RipperPS can do something.
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: Check the [README](../blob/main/README.md) first, the answer might already be there.
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+    validations:
+      required: true
+  - type: textarea
+    id: tried
+    attributes:
+      label: What you've tried
+  - type: input
+    id: version
+    attributes:
+      label: RipperPS version
+      placeholder: "0.2.0"

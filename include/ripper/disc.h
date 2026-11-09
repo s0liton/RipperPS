@@ -60,6 +60,10 @@ struct rip_disc {
   // whether this drive read that area's first sector.
   int gd_rom;
   int gd_hd_readable;
+  // Xbox and Xbox 360: the game partition (XDVDFS at sector 32) reads as it
+  // is, as on an image, a burned backup or a drive left unlocked. It rips as
+  // a plain ISO, on any drive.
+  int xbox_partition;
 };
 
 #define GD_HD_LBA 45000

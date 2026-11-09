@@ -1,0 +1,41 @@
+# Host build and tests, then the PS5 payload, on every push and pull request.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  host:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build libcurl4-openssl-dev zlib1g-dev libzstd-dev
+      - run: cmake -S . -B build/host -G Ninja
+      - run: cmake --build build/host
+      - run: cd build/host && ctest --output-on-failure
+      - run: cmake -S . -B build/asan -G Ninja -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
+      - run: cmake --build build/asan
+      - run: cd build/asan && ctest --output-on-failure
+
+  payload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      # The SDK image tools/ps5-build.sh uses, cached between runs. The cache
+      # only saves time, so failing to write it must not fail the build.
+      - uses: docker/build-push-action@v6
+        with:
+          context: src/platform/ps5/docker
+          tags: ripper-ps5sdk:v0.43
+          load: true
+          cache-from: type=gha,scope=ps5
+          cache-to: type=gha,mode=max,scope=ps5,ignore-error=true
+      - run: PS5_IMAGE=ripper-ps5sdk:v0.43 tools/ps5-build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ripper.elf
+          path: build/ps5/ripper.elf
+          if-no-files-found: error

@@ -28,5 +28,6 @@ size_t test_make_sfo(unsigned char *out, const char *key, const char *value);
 void test_rip_all(void);
 void test_formats(void);
 void test_firmware(void);
+void test_identify(void);
 
 #endif

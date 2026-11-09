@@ -110,7 +110,7 @@ add_library(ripper_service STATIC
   src/service/deliver_romm.c
   src/service/deliver_nfs.c
   src/service/deliver_smb.c
-  src/service/diagnose.c
+  src/service/drivetest.c
   src/service/disc_report.c
   src/service/drives.c
   src/service/gamedb.c
@@ -196,6 +196,7 @@ else()
     tests/fake_drive.c
     tests/test_firmware.c
     tests/test_formats.c
+    tests/test_identify.c
     tests/udf_builder.c
     tests/iso_builder.c
     tests/test_main.c

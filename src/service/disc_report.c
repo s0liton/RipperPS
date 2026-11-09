@@ -33,26 +33,6 @@ static void reports_dir(char *out, size_t n) {
   svc_path_join(out, n, diag, "discs");
 }
 
-// Letters, digits and dashes, for the folder's name.
-static void slug(const char *in, char *out, size_t n) {
-  size_t k = 0;
-  int dash = 0;
-
-  for (; *in && k + 1 < n; in++) {
-    if (isalnum((unsigned char)*in)) {
-      out[k++] = *in;
-      dash = 0;
-    } else if (!dash && k) {
-      out[k++] = '-';
-      dash = 1;
-    }
-  }
-  while (k && out[k - 1] == '-') {
-    k--;
-  }
-  out[k] = '\0';
-}
-
 // Lines the same as the one before (zeros, mostly) fold into one "*".
 static void hex_dump(FILE *f, const uint8_t *b, size_t n) {
   size_t i, j;
@@ -404,7 +384,7 @@ static const char *disc_label(const struct rip_disc *d) {
   return d->volume_id[0] ? d->volume_id : rip_disc_kind_name(d->kind);
 }
 
-void disc_report_write(const struct disc_report *r) {
+void disc_report_write(const struct disc_report *r, char *dir_out, size_t dn) {
   char dir[SVC_PATH];
   char base[SVC_PATH];
   char name[160];
@@ -417,10 +397,13 @@ void disc_report_write(const struct disc_report *r) {
   struct tm tm;
   FILE *f;
 
+  if (dir_out && dn) {
+    dir_out[0] = '\0';
+  }
   localtime_r(&now, &tm);
   strftime(stamp, sizeof(stamp), "%Y%m%d-%H%M%S", &tm);
   label = disc_label(r->disc);
-  slug(label, what, sizeof(what));
+  svc_slug(label, what, sizeof(what));
   snprintf(name, sizeof(name), "%s-%s-%s", stamp, r->drive_id, what[0] ? what : "disc");
   reports_dir(base, sizeof(base));
   svc_path_join(dir, sizeof(dir), base, name);
@@ -450,6 +433,9 @@ void disc_report_write(const struct disc_report *r) {
     list_dir(f, r->mount_root, "", 0, &lines);
   }
   fclose(f);
+  if (dir_out && dn) {
+    svc_str_copy(dir_out, dn, dir);
+  }
   RIP_INFO("disc report: %s", name);
 }
 

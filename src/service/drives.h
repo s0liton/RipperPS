@@ -60,4 +60,15 @@ void drives_release(const char *id, int ok, const char *message);
 // disc is still in.
 void drives_dumped(const char *id, unsigned disc_seq);
 
+// For the drive test (drivetest.h), which follows a drive disc by disc.
+// The state's name ("ready", ...), the disc's number and whether something has
+// the drive; RIP_ENOENT if there's no such drive.
+int drives_peek(const char *id, char *state, size_t sn, unsigned *disc_seq, int *busy);
+// The drive as /api/drives gives it (free it), NULL if there's no such drive.
+cJSON *drives_one_json(const char *id);
+// The folder of the report written for that disc, RIP_ENOENT if none (yet).
+int drives_report_dir(const char *id, unsigned disc_seq, char *out, size_t n);
+// What a claimed drive shows while it's held: "Testing the drive".
+void drives_busy_message(const char *id, const char *message);
+
 #endif

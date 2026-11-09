@@ -470,3 +470,25 @@ void svc_time_left(double seconds, char *out, size_t n) {
     snprintf(out, n, " · %d h %d min left", min / 60, min % 60);
   }
 }
+
+void svc_slug(const char *in, char *out, size_t n) {
+  size_t k = 0;
+  int dash = 0;
+
+  if (!n) {
+    return;
+  }
+  for (; *in && k + 1 < n; in++) {
+    if (isalnum((unsigned char)*in)) {
+      out[k++] = *in;
+      dash = 0;
+    } else if (!dash && k) {
+      out[k++] = '-';
+      dash = 1;
+    }
+  }
+  while (k && out[k - 1] == '-') {
+    k--;
+  }
+  out[k] = '\0';
+}

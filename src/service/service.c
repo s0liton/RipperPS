@@ -48,7 +48,7 @@ int service_main(void) {
   plat_local_ip(ip, sizeof(ip));
   RIP_INFO("web UI on http://%s:%d", ip[0] ? ip : "127.0.0.1", port);
   snprintf(body, sizeof(body), "http://%s:%d", ip[0] ? ip : "127.0.0.1", port);
-  plat_notify("Ripper is running", body);
+  plat_notify("RipperPS is running", body);
 
   last = svc_now();
   for (;;) {

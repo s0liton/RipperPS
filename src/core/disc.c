@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <unistd.h>
 
 #include "ripper/common.h"
@@ -327,8 +328,9 @@ static void identify_from_iso(struct iso_fs *fs, struct rip_disc *d) {
     d->kind = RIP_DISC_NEOGEO_CD;
     return;
   }
-  if (mmc_profile_is_cd(d->profile) && (iso_has_dir(fs, "VCD") || iso_has_dir(fs, "SVCD")) &&
-      iso_has_dir(fs, "MPEGAV")) {
+  // A Video CD keeps its streams in MPEGAV; a Super Video CD in MPEG2.
+  if (mmc_profile_is_cd(d->profile) && ((iso_has_dir(fs, "VCD") && iso_has_dir(fs, "MPEGAV")) ||
+                                        (iso_has_dir(fs, "SVCD") && iso_has_dir(fs, "MPEG2")))) {
     d->kind = RIP_DISC_VIDEO_CD;
     return;
   }
@@ -439,6 +441,14 @@ static int identify_cd_header(struct rip_reader *r, const struct cd_toc *toc, st
       d->kind = RIP_DISC_PCE_CD;
       return 1;
     }
+    // CD-i: a Green Book volume descriptor where ISO 9660's would be. Drives
+    // say so in the TOC's disc type too, but images and some drives don't.
+    if (i == 0 && rip_reader_read(r, tr->start + 16, 1, s1) == RIP_OK && s1[0] == 0x01 &&
+        !memcmp(s1 + 1, "CD-I ", 5)) {
+      d->kind = RIP_DISC_CDI;
+      header_field(s1 + 40, 32, d->title, sizeof(d->title));
+      return 1;
+    }
     return 0;  // the first data track decides
   }
   return 0;
@@ -474,9 +484,20 @@ static void identify_cd(struct rip_disc *d, struct rip_reader *reader, struct ri
   if (audio) {
     cd_musicbrainz_id(&d->toc, d->musicbrainz_id);
   }
-  if (audio == d->toc.count || (audio && cd_track_is_audio(&d->toc.tracks[0]) && d->toc.sessions > 1 &&
-                                !cd_track_is_audio(&d->toc.tracks[d->toc.count - 1]))) {
+  if (audio == d->toc.count) {
     d->kind = RIP_DISC_CD_AUDIO;
+    return;
+  }
+  if (audio && cd_track_is_audio(&d->toc.tracks[0]) && d->toc.sessions > 1 &&
+      !cd_track_is_audio(&d->toc.tracks[d->toc.count - 1])) {
+    // Music, then a data session: an Enhanced CD, or a Dreamcast MIL-CD,
+    // whose data session boots the game.
+    if (reader && identify_cd_header(reader, &d->toc, d) && d->kind == RIP_DISC_DREAMCAST) {
+      return;
+    }
+    d->kind = RIP_DISC_CD_AUDIO;
+    d->title[0] = '\0';
+    d->title_id[0] = '\0';
     return;
   }
   if (d->toc.type == CD_TYPE_CDI) {
@@ -489,6 +510,51 @@ static void identify_cd(struct rip_disc *d, struct rip_reader *reader, struct ri
   if (d->kind == RIP_DISC_DREAMCAST && d->gd_rom) {
     gd_probe(t, d);
   }
+}
+
+// An Xbox game partition that reads as it is: XDVDFS's volume descriptor at
+// sector 32 ("MICROSOFT*XBOX*MEDIA" at its start and end). The root folder
+// tells the consoles apart: default.xbe for the Xbox, default.xex for the 360.
+static int xdvdfs_has(const uint8_t *dir, size_t len, const char *name) {
+  size_t nl = strlen(name);
+  size_t i;
+
+  // Each entry: left, right (u16), sector, size (u32), attributes, name length, name.
+  for (i = 14; i + nl <= len; i++) {
+    if (dir[i - 1] == nl && !strncasecmp((const char *)dir + i, name, nl)) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+static void looks_like_xiso(struct rip_reader *r, struct rip_disc *d) {
+  uint8_t vd[2048];
+  uint8_t *dir;
+  uint32_t root;
+  uint32_t size;
+  uint32_t count;
+
+  if (r->sector_size != 2048 || (r->sector_count && r->sector_count <= 33) || rip_reader_read(r, 32, 1, vd) != RIP_OK ||
+      memcmp(vd, "MICROSOFT*XBOX*MEDIA", 20) != 0 || memcmp(vd + 0x7EC, "MICROSOFT*XBOX*MEDIA", 20) != 0) {
+    return;
+  }
+  d->kind = RIP_DISC_XBOX;
+  d->xbox_partition = 1;
+  root = rip_le32(vd + 0x14);
+  size = rip_le32(vd + 0x18);
+  count = (size + 2047) / 2048;
+  if (count == 0 || count > 32 || (r->sector_count && root + count > r->sector_count)) {
+    return;
+  }
+  dir = malloc((size_t)count * 2048);
+  if (dir && rip_reader_read(r, root, count, dir) == RIP_OK) {
+    if (xdvdfs_has(dir, size, "default.xex")) {
+      d->kind = RIP_DISC_XBOX_360;
+    }
+  }
+  free(dir);
+  RIP_INFO("Xbox game partition at sector 32: %s", rip_disc_kind_name(d->kind));
 }
 
 // Xbox and Xbox 360 discs show a stock drive only a small DVD-Video
@@ -522,6 +588,15 @@ static void looks_like_xbox(struct rip_transport *t, struct rip_disc *d) {
   RIP_INFO("DVD: %llu sectors readable, %llu on the disc (layers %u)", (unsigned long long)d->sector_count,
            (unsigned long long)physical, ((b[2] >> 5) & 3) + 1);
   if (physical > 1000000 && physical > d->sector_count * 8) {
+    d->kind = RIP_DISC_XBOX;
+    return;
+  }
+  // As redumper reads an XGD disc, its physical format is the video
+  // partition's own: two layers, opposite track path, a few tens of MB on
+  // each (an XGD2's breaks at PSN 0x0333AF). A pressed dual-layer disc puts
+  // its break near the middle of gigabytes; one with under 256 MB on layer 0
+  // and under 512 MB in all is what an Xbox disc shows a stock drive.
+  if ((b[2] & 0x60) && (b[2] & 0x10) && end_l0 > start && end_l0 - start + 1 < 0x20000 && physical < 0x40000) {
     d->kind = RIP_DISC_XBOX;
   }
 }
@@ -611,7 +686,7 @@ void rip_disc_refine(struct rip_disc *d, struct rip_drive *drive) {
   if (!drive) {
     return;
   }
-  if (d->kind == RIP_DISC_XBOX && (drive->caps & RIP_CAP_XBOX)) {
+  if (d->kind == RIP_DISC_XBOX && !d->xbox_partition && (drive->caps & RIP_CAP_XBOX)) {
     struct xbox_layout *x = malloc(sizeof(*x));
     if (x && xbox_read_layout(drive, x) == RIP_OK) {
       d->kind = x->version == 1 ? RIP_DISC_XBOX : RIP_DISC_XBOX_360;
@@ -643,20 +718,22 @@ int rip_disc_title_from_mount(struct rip_disc *d, const char *mount_root) {
 }
 
 // A PS5 disc names itself in its second sector: "PlayStation5" at 0x400, the
-// title ID ("PPSA-28038") at 0x410. Readable before the system mounts the disc.
-static void title_from_ps5_header(struct rip_reader *r, struct rip_disc *d) {
+// title ID ("PPSA-28038") at 0x410. Readable before the system mounts the
+// disc, and in a USB Blu-ray drive, which reports it as a plain BD-ROM.
+static int title_from_ps5_header(struct rip_reader *r, struct rip_disc *d) {
   uint8_t s1[2048];
   char id[16];
 
-  if (r->sector_size != sizeof(s1) || rip_reader_read(r, 1, 1, s1) != RIP_OK ||
+  if (r->sector_size != sizeof(s1) || r->sector_count < 2 || rip_reader_read(r, 1, 1, s1) != RIP_OK ||
       memcmp(s1 + 0x400, "PlayStation5", 12) != 0) {
-    return;
+    return 0;
   }
   header_field(s1 + 0x410, 10, id, sizeof(id));
   // As the disc's app folder and the system name it: "PPSA28038".
   if (strlen(id) == 10 && id[4] == '-') {
     snprintf(d->title_id, sizeof(d->title_id), "%.4s%.5s", id, id + 5);
   }
+  return 1;
 }
 
 int rip_disc_identify(struct rip_disc *out, uint16_t profile, struct rip_reader *reader, struct rip_transport *t,
@@ -708,7 +785,12 @@ int rip_disc_identify(struct rip_disc *out, uint16_t profile, struct rip_reader 
   if (t && mmc_profile_is_dvd(profile) && out->kind == RIP_DISC_DVD_DATA && !out->has_iso9660 && !out->has_udf) {
     looks_like_nintendo(t, out);
   }
-  if (t && profile == MMC_PROFILE_DVD_ROM && (out->kind == RIP_DISC_DVD_VIDEO || out->kind == RIP_DISC_DVD_DATA)) {
+  if (reader && (out->kind == RIP_DISC_DVD_DATA || out->kind == RIP_DISC_BD_DATA) && !out->has_iso9660 &&
+      !out->has_udf) {
+    looks_like_xiso(reader, out);
+  }
+  if (t && profile == MMC_PROFILE_DVD_ROM && !out->xbox_partition &&
+      (out->kind == RIP_DISC_DVD_VIDEO || out->kind == RIP_DISC_DVD_DATA)) {
     looks_like_xbox(t, out);
   }
   if (t && mmc_profile_is_bd(profile) && out->kind == RIP_DISC_BD_DATA && !out->has_iso9660 && !out->has_udf) {
@@ -720,6 +802,8 @@ int rip_disc_identify(struct rip_disc *out, uint16_t profile, struct rip_reader 
   // The system mounts a disc a while after the drive has it; the dump only needs the ID.
   if (!out->title_id[0] && reader && out->kind == RIP_DISC_PS5_BD) {
     title_from_ps5_header(reader, out);
+  } else if (reader && out->kind == RIP_DISC_BD_DATA && title_from_ps5_header(reader, out)) {
+    out->kind = RIP_DISC_PS5_BD;
   }
   if (out->has_toc) {
     RIP_INFO("CD: %u tracks in %u session(s), lead-out %u, type 0x%02x%s%s", out->toc.count, out->toc.sessions,

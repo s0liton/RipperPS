@@ -75,6 +75,7 @@ bool truthy(const std::string &v) {
 
 void SettingsPage::enter() {
   mode_ = kMain;
+  discard_armed_ = false;
   list_.set_focus(0);
   app().refresh_stats();
   app().refresh_drive_test();
@@ -145,23 +146,47 @@ void SettingsPage::main_rows(std::vector<Row> &rows, std::vector<Item> &items) c
     add({RowKind::action, sys.name, value}, {Item::profile, -1, sys.id});
   }
 
-  // The drive test: everything about a drive and how it reads the disc in
-  // it, zipped to send to whoever asked.
+  // The drive test: discs one after another, for the drive report form.
   add({RowKind::header, "Drive test"}, {});
   const DriveTest &test = a.drive_test();
-  for (const Drive &d : a.drives()) {
-    Row r{RowKind::action, "Test " + d.model(), "", d.has_disc ? "With the disc in it" : "Any disc, or none"};
-    if (test.drive == d.id && test.state == "running") {
-      r.label = "Testing " + d.model();
-      r.detail = test.step;
-      r.progress = test.total > 0 ? static_cast<float>(test.done / test.total) : 0.0f;
-      r.value = "Cancel";
-    } else if (test.drive == d.id && (test.state == "done" || test.state == "cancelled") && !test.file.empty())
-      r.detail = "/data/ripper/diag/" + test.file;
-    else if (test.drive == d.id && test.state == "failed")
-      r.detail = test.error;
-    r.enabled = d.state != "ripping";
-    add(r, {Item::drive_test, -1, d.id});
+  if (test.active()) {
+    Row r{RowKind::info, "Testing " + (test.drive_name.empty() ? test.drive_label : test.drive_name), "", test.prompt};
+    if (test.state == "testing" && test.total > 0)
+      r.progress = static_cast<float>(test.done / test.total);
+    add(r, {});
+    for (const Drive &d : a.drives())
+      if (d.id == test.drive && d.has_disc && test.state == "waiting")
+        add({RowKind::action, "Eject", "", "Then put in the next disc"}, {Item::test_eject, -1, d.id});
+    add({RowKind::action, "Finish", "", "Pack the results to send"}, {Item::test_finish, -1, ""});
+    if (test.discs.empty())
+      add({RowKind::info, "Most wanted", "", "GameCube, Wii, Xbox 360 and Xbox discs, then Wii U, Dreamcast, CD games"},
+          {});
+  } else if (test.state == "done") {
+    add({RowKind::info, "Results ready", "", "Scan the code on the right with a phone to send them"}, {});
+  } else if (test.state == "failed") {
+    add({RowKind::info, "The test went wrong", "", test.error}, {});
+  }
+  for (auto it = test.discs.rbegin(); it != test.discs.rend(); ++it) {
+    Row r{RowKind::choice, "Disc " + std::to_string(it->n) + ": " + (it->kind.empty() ? "not recognized" : it->kind),
+          it->said.empty() ? "What is it?" : it->said, it->outcome};
+    if (it->result == "testing")
+      r.detail = "Testing";
+    add(r, {Item::test_disc, it->n, ""});
+  }
+  if (test.active()) {
+    Row r{RowKind::action, discard_armed_ ? "Press again to throw it all away" : "Throw away", "",
+          "Stop and delete this test"};
+    r.danger = true;
+    add(r, {Item::test_discard, -1, ""});
+  } else {
+    if (test.state == "done" || test.state == "failed")
+      add({RowKind::action, "Close the test", "", "The zip stays in /data/ripper/diag"}, {Item::test_discard, -1, ""});
+    for (const Drive &d : a.drives()) {
+      Row r{RowKind::action, "Test " + d.model(), "",
+            d.has_disc ? "Starts with the disc in it" : "Then put in discs, one after another"};
+      r.enabled = d.state != "ripping";
+      add(r, {Item::drive_test, -1, d.id});
+    }
   }
 
   const Stats &st = a.stats();
@@ -393,13 +418,45 @@ void SettingsPage::activate(const Item &item, int step, ui::Feedback &feedback) 
     a.keep_awake(kAwakeMinutes[awake_]);
     break;
   case Item::drive_test:
-    if (a.drive_test().state == "running" && a.drive_test().drive == item.key)
-      a.cancel_drive_test();
-    else if (a.drive_test().state == "running")
+    if (a.drive_test().active())
       list_.refuse(feedback);
     else
       a.start_drive_test(item.key);
     break;
+  case Item::test_eject:
+    a.eject(item.key);
+    break;
+  case Item::test_finish:
+    a.finish_drive_test();
+    break;
+  case Item::test_discard:
+    if (a.drive_test().active() && !discard_armed_) {
+      discard_armed_ = true;
+      break;
+    }
+    discard_armed_ = false;
+    a.discard_drive_test();
+    break;
+  case Item::test_disc: {
+    // What it really is: left and right step through the catalog's systems.
+    std::vector<std::string> names{""};
+    for (const System &sys : a.catalog().systems)
+      names.push_back(sys.name);
+    names.push_back("Not sure");
+    names.push_back("Something else");
+    std::string said;
+    for (const TestDisc &d : a.drive_test().discs)
+      if (d.n == item.index)
+        said = d.said;
+    const int n = static_cast<int>(names.size());
+    int at = 0;
+    for (int i = 0; i < n; ++i)
+      if (names[static_cast<std::size_t>(i)] == said)
+        at = i;
+    at = ((at + (step ? step : 1)) % n + n) % n;
+    a.label_test_disc(item.index, names[static_cast<std::size_t>(at)]);
+    break;
+  }
   case Item::tmdb:
     editing_ = item;
     entry_.open("TMDB key", "", true, "An API key or read token from themoviedb.org; empty turns it off");
@@ -619,27 +676,27 @@ void SettingsPage::draw_side(hui::gfx::DrawList &list, const ui::Fonts &fonts, c
                   kSide.w - 88, 32, look.panel_muted, 3);
     return;
   }
-  // A drive test that ran: what it found, and the zip to send.
+  // A drive test: what to do now, and a code for a phone, where the zip is
+  // downloaded and the report form opened.
   const DriveTest &t = a.drive_test();
   if (!t.state.empty() && t.state != "idle") {
     ui::text(list, fonts.semibold, "DRIVE TEST", x, y, 16, look.panel_muted, hui::gfx::Align::left, 3.0f);
     ui::text(list, fonts.semibold,
-             fonts.semibold.font->fit(t.drive_name.empty() ? t.drive : t.drive_name, 26, kSide.w - 88), x, y + 40, 26,
-             look.panel_text);
-    if (t.state == "running")
-      ui::paragraph(list, fonts.regular, t.step, x, y + 84, 22, kSide.w - 88, 30, look.panel_muted, 2);
-    else if (t.state == "failed")
-      ui::paragraph(list, fonts.regular, t.error, x, y + 84, 22, kSide.w - 88, 30, look.danger, 3);
-    else {
-      char line[96];
-      std::snprintf(line, sizeof line, "%.0f of %.0f commands answered", t.answered, t.commands);
-      ui::text(list, fonts.regular, line, x, y + 84, 22, look.panel_muted);
-      ui::paragraph(list, fonts.mono, t.findings, x, y + 126, 18, kSide.w - 88, 26, look.panel_text, 12);
+             fonts.semibold.font->fit(t.drive_name.empty() ? t.drive_label : t.drive_name, 26, kSide.w - 88), x,
+             y + 40, 26, look.panel_text);
+    ui::paragraph(list, fonts.regular, t.state == "failed" && !t.error.empty() ? t.error : t.prompt, x, y + 84, 22,
+                  kSide.w - 88, 30, t.state == "failed" ? look.danger : look.panel_text, 3);
+    if (!s.ip.empty()) {
+      const std::string link = "http://" + s.ip + ":" + std::to_string(s.port) + "/#drivetest";
+      if (qr_for_ != link) {
+        qr_for_ = link;
+        qr_ = QrCode::encode(link);
+      }
+      draw_qr(list, qr_, {x, y + 184, 200, 200});
       ui::paragraph(list, fonts.regular,
-                    "/data/ripper/diag/" + t.file +
-                        ". Every disc put in leaves a short report there too: the web UI's Log page downloads "
-                        "them all in one zip.",
-                    x, kSide.y + kSide.h - 84, 18, kSide.w - 88, 24, look.panel_muted, 3);
+                    t.state == "done" ? "Scan this with a phone to download the zip and open the drive report form."
+                                      : "On a phone: each disc's details, and the discs that help most.",
+                    x, y + 400, 18, kSide.w - 88, 24, look.panel_muted, 3);
     }
     return;
   }
@@ -655,7 +712,7 @@ void SettingsPage::draw_side(hui::gfx::DrawList &list, const ui::Fonts &fonts, c
     draw_qr(list, qr_, {x, y + 76, 240, 240});
     ui::text(list, fonts.regular, "Disc reports: Log, then Download reports", x, y + 340, 18, look.panel_muted);
   }
-  ui::text(list, fonts.semibold, "RIPPER", x, y + 380, 16, look.panel_muted, hui::gfx::Align::left, 3.0f);
+  ui::text(list, fonts.semibold, "VERSION", x, y + 380, 16, look.panel_muted, hui::gfx::Align::left, 3.0f);
   ui::text(list, fonts.semibold, s.version + (s.build.empty() || s.build == "dev" ? "" : " (" + s.build + ")"), x,
            y + 416, 24, look.panel_text);
   ui::text(list, fonts.regular, "Running for " + duration(s.uptime), x, y + 452, 20, look.panel_muted);

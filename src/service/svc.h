@@ -18,6 +18,11 @@
 #endif
 
 #define SVC_DEFAULT_PORT 8790
+// Where drive test results are sent: GitHub's new-issue page with the drive
+// report form (.github/ISSUE_TEMPLATE/drive-report.yml). The web UI adds the
+// form's fields to it.
+#define RIPPER_REPORT_FORM "https://github.com/s0liton/ripper/issues/new?template=drive-report.yml"
+
 #define SVC_PATH 1024
 
 // Starts a detached thread with a 1 MiB stack: console threads get a tiny one
@@ -51,6 +56,8 @@ void svc_template(char *out, size_t n, const char *tpl, const char *const *vars)
 // "THE_MATRIX_D1" -> "The Matrix": a volume label people can read.
 void svc_pretty_label(const char *label, char *out, size_t n);
 int svc_is_id(const char *s);  // [a-z0-9_-]+, for ids from requests
+// Letters, digits and single dashes, for a file or folder name: "HL-DT-ST BD-RE" -> "HL-DT-ST-BD-RE".
+void svc_slug(const char *in, char *out, size_t n);
 
 // JSON.
 const char *jstr(const cJSON *o, const char *k, const char *def);

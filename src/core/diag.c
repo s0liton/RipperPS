@@ -316,6 +316,8 @@ static void drive_identity(struct diag *d) {
       say(d, "OmniDrive firmware %u.%u.%u", b[83], b[84], b[85]);
       finding(d, "firmware: OmniDrive %u.%u.%u%s", b[83], b[84], b[85],
               (b[83] << 16 | b[84] << 8 | b[85]) < 0x010004 ? " (1.0.4 or newer reads DVDs right)" : "");
+    } else if (!memcmp(b + 36, "KREON V1.00", 11)) {
+      finding(d, "firmware: Kreon (Xbox and Xbox 360 unlock)");
     } else if (!memcmp(b + 36, "SpiralDrive v", 13)) {
       finding(d, "firmware: SpiralDrive (%.20s)", b + 36);
     } else if (b[4] + 5u < 86) {

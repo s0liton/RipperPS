@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ripper</title>
+<title>RipperPS</title>
 <script>
 // The consoles' browsers can't blur fast enough: themes drop the blur there.
 if (/PlayStation/.test(navigator.userAgent)) document.documentElement.className += " low-gpu";
@@ -18,11 +18,12 @@ if (/PlayStation/.test(navigator.userAgent)) document.documentElement.className 
 </head>
 <body>
 <header>
-  <h1>Rip<span>per</span></h1>
+  <h1>Ripper<span>PS</span></h1>
   <nav id="tabs">
     <button class="tab active" data-tab="drives">Drives</button>
     <button class="tab" data-tab="games">Games</button>
     <button class="tab" data-tab="queue">Queue <span id="queueCount"></span></button>
+    <button class="tab" data-tab="drivetest">Drive test</button>
     <button class="tab" data-tab="settings">Settings</button>
     <button class="tab" data-tab="log">Log</button>
   </nav>
@@ -48,6 +49,10 @@ if (/PlayStation/.test(navigator.userAgent)) document.documentElement.className 
     <div class="row"><h2 style="margin:0">Rips</h2><button class="fixed" id="clearJobs">Clear finished</button></div>
     <div id="jobs"><p class="muted">Nothing ripped yet.</p></div>
   </div>
+</section>
+
+<section id="drivetest">
+  <div id="dtPanel"><div class="card"><p class="muted">Looking</p></div></div>
 </section>
 
 <section id="settings">
@@ -84,7 +89,7 @@ if (/PlayStation/.test(navigator.userAgent)) document.documentElement.className 
     <div class="row"><h2 style="margin:0">Log</h2><button class="fixed" id="refreshLog">Refresh</button></div>
     <pre id="logText"></pre>
     <div class="row"><a class="button" href="/api/reports" download="ripper-reports.zip">Download reports</a></div>
-    <p class="muted small">Every disc put in leaves a short report of what the drive and ripper made of it. This zips them all with the drive tests and the whole log, to send back.</p>
+    <p class="muted small">Every disc put in leaves a short report of what the drive and RipperPS made of it. This zips them all with the drive tests and the whole log. To help with a drive RipperPS doesn't know yet, the Drive test tab is the better way.</p>
   </div>
 </section>
 
@@ -148,6 +153,7 @@ function showTab(name) {
   if (name === "log") loadLog();
   if (name === "queue") loadJobs();
   if (name === "games") loadGames();
+  if (name === "drivetest") loadDriveTest();
 }
 each(".tab", function (t) { t.onclick = function () { showTab(t.dataset.tab); }; });
 
@@ -310,46 +316,26 @@ function updateWhere(d) {
   }
 }
 
-// The drive test: everything about the drive and how it reads this disc,
-// zipped to send back. Any disc, or none.
-var diagTimer = null;
+// The drive panel's way into the drive test (its own tab, below).
 function renderDiag(d) {
-  var box = $("diagBox"), g = state.diag || {};
+  var box = $("diagBox"), g = state.dt || {};
   if (!box) return;
-  if (d.state === "ripping") { box.style.display = "none"; return; }
+  var active = g.state && g.state !== "idle" && g.state !== "done" && g.state !== "failed";
+  if (d.state === "ripping" && !(active && g.drive === d.id)) { box.style.display = "none"; return; }
   box.style.display = "";
-  var mine = g.drive === d.id, h = "<h3>Drive test</h3>";
-  if (mine && g.state === "running") {
-    var pct = g.total ? Math.round(100 * g.done / g.total) : 0;
-    h += '<p class="pulse">Testing: ' + esc(g.step) + "</p>" + '<div class="bar"><i style="width:' + pct + '%"></i></div>' +
-      '<div class="row" style="margin-top:10px"><button class="danger small" id="diagCancel">Cancel</button></div>';
+  var h = "<h3>Drive test</h3>";
+  if (active && g.drive === d.id) {
+    h += '<p>' + esc(g.prompt) + '</p><div class="row"><button class="primary" id="dtOpen">Open the drive test</button></div>';
+  } else if (active) {
+    h += '<p class="muted">A drive test is running on another drive.</p>';
   } else {
-    if (mine && (g.state === "done" || g.state === "cancelled") && g.file) {
-      h += '<p><b>' + esc(g.drive_name) + "</b>" + (g.disc ? " · " + esc(g.disc) : "") + " · " + g.answered + " of " + g.commands +
-        " commands taken" + (g.state === "cancelled" ? " (cancelled partway)" : "") + "</p>" +
-        '<pre class="findings">' + esc(g.findings || "") + "</pre>" +
-        '<div class="row"><a class="button primary" href="/api/diagnose/file?name=' + encodeURIComponent(g.file) + '" download="' + esc(g.file) + '">Download ' + esc(g.file) + "</a>" +
-        '<button id="diagGo">Test again</button></div><p class="muted small">Also on the console in /data/ripper/diag.</p>';
-    } else {
-      if (mine && g.state === "failed") h += '<p class="err small">' + esc(g.error) + "</p>";
-      h += '<div class="row"><button id="diagGo">Test this drive</button></div>';
-    }
+    h += '<p class="muted">Help RipperPS learn this drive: put in a few discs of any kind, one after the other, and send the results. ' +
+      'Most useful from drives with custom firmware (Kreon, OmniDrive, LibreDrive) or ones RipperPS doesn\'t know yet.</p>' +
+      '<div class="row"><button id="dtStart">Test this drive</button></div>';
   }
-  h += '<p class="muted small">Each disc put in leaves a short report too. <a href="/api/reports" download="ripper-reports.zip">Download reports</a> zips them with the drive tests and the log, to send back.</p>';
   box.innerHTML = h;
-  if ($("diagGo")) $("diagGo").onclick = function () {
-    api("POST", "/api/drives/" + d.id + "/diagnose").then(function () { pollDiag(d); }).catch(function (e) { toast(e.message, true); });
-  };
-  if ($("diagCancel")) $("diagCancel").onclick = function () { api("POST", "/api/diagnose/cancel"); };
-}
-function pollDiag(d) {
-  if (diagTimer) clearTimeout(diagTimer);
-  api("GET", "/api/diagnose").then(function (g) {
-    state.diag = g;
-    var cur = find(state.drives, "id", state.drive);
-    if (cur && cur.id === g.drive) renderDiag(cur);
-    if (g.state === "running") diagTimer = setTimeout(function () { pollDiag(d); }, 1500);
-  });
+  if ($("dtOpen")) $("dtOpen").onclick = function () { showTab("drivetest"); };
+  if ($("dtStart")) $("dtStart").onclick = function () { startDriveTest(d.id); };
 }
 
 function wireDrive(d) {
@@ -690,6 +676,149 @@ $("saveSettings").onclick = function () {
   }).catch(function (e) { toast(e.message, true); });
 };
 
+/* ---------- Drive test ---------- */
+
+// A guided session: the drive, then one disc after another, each tested as it
+// goes in; the person says what each disc really is. Finish makes a zip to
+// attach to the drive report form on GitHub. Nothing leaves the console by itself.
+function startDriveTest(id) {
+  api("POST", "/api/drives/" + id + "/drivetest").then(function () { showTab("drivetest"); }).catch(function (e) { toast(e.message, true); });
+}
+function loadDriveTest() {
+  return api("GET", "/api/drivetest").then(function (g) {
+    var prev = state.dt;
+    state.dt = g;
+    renderDriveTest();
+    // The drive panel's card follows the session.
+    if (!prev || prev.state !== g.state || prev.prompt !== g.prompt) { var cur = find(state.drives, "id", state.drive); if (cur) renderDiag(cur); }
+  });
+}
+// The discs that teach us the most, most wanted first.
+var WANTED = [
+  ["GameCube", "Whether OmniDrive's raw reads work, and Nintendo's scrambling comes off", "OmniDrive (MediaTek LG/ASUS Blu-ray drives); old LG/Hitachi DVD drives"],
+  ["Wii", "The same, on single and dual-layer discs", "OmniDrive"],
+  ["Xbox 360", "The unlock, the security sector, which XGD it is", "Kreon (Lite-On, Samsung, Philips DVD drives), OmniDrive"],
+  ["Xbox (original)", "The same for XGD1", "Kreon, OmniDrive"],
+  ["Wii U", "Raw Blu-ray reads with Nintendo's seed", "OmniDrive on a Blu-ray drive"],
+  ["Dreamcast (GD-ROM)", "Whether the high-density area reads", "CD drives that read past the lead-out (Plextor, some Lite-On)"],
+  ["Saturn, Sega CD, PC Engine CD, 3DO, CD-i, PS1", "Identification, C2, subchannel and offsets for CD games", "Any CD drive; Plextor best"],
+  ["Xbox One or Series", "What a USB Blu-ray drive shows of them", "Any Blu-ray drive"],
+  ["Music CD", "Read offset, C2 and accurate audio", "Any CD drive"],
+  ["PS4 or PS5 game", "Whether a USB drive reads them at all", "Any Blu-ray drive"],
+  ["DVD or Blu-ray movie", "Copy protection handling, read speed", "Any; LibreDrive for 4K"]
+];
+function wantedTable() {
+  var h = '<div class="tablewrap"><table class="formats wanted"><thead><tr><th>Disc</th><th>What it tells us</th><th>Drives most likely to read it</th></tr></thead><tbody>';
+  WANTED.forEach(function (w, i) {
+    h += "<tr><td><b>" + esc(w[0]) + "</b>" + (i < 4 ? " " + pill("most wanted", "ok") : "") + "</td><td>" + esc(w[1]) + '</td><td class="muted">' + esc(w[2]) + "</td></tr>";
+  });
+  return h + "</tbody></table></div>";
+}
+function systemChoices(selected) {
+  var h = '<option value="">What is this disc?</option>', names = [];
+  ((state.catalog && state.catalog.systems) || []).forEach(function (s) { names.push(s.name); });
+  ["Not sure", "Something else"].forEach(function (n) { names.push(n); });
+  if (selected && names.indexOf(selected) < 0) names.push(selected);
+  names.forEach(function (n) { h += '<option' + (n === selected ? " selected" : "") + ">" + esc(n) + "</option>"; });
+  return h;
+}
+function dtFormUrl(g) {
+  var discs = (g.discs || []).map(function (x) {
+    return x.n + ". " + (x.said || "(not said)") + (x.note ? " (" + x.note + ")" : "") + ": RipperPS saw " + (x.kind || "nothing") +
+      (x.title ? " '" + x.title + "'" : "") + ", " + x.outcome + (x.can ? "; can make " + x.can : "");
+  }).join("\n");
+  var q = "&title=" + encodeURIComponent("Drive report: " + (g.drive_name || g.drive_label)) +
+    "&drive=" + encodeURIComponent(g.drive_name) + "&firmware_seen=" + encodeURIComponent(g.firmware || "") +
+    "&reads=" + encodeURIComponent(g.reads || "") + "&discs=" + encodeURIComponent(discs.slice(0, 1500)) +
+    "&version=" + encodeURIComponent(g.version);
+  return g.form + q;
+}
+function dtDisc(x, editable) {
+  var h = '<div class="dtdisc"><div class="dthead"><b>Disc ' + x.n + "</b> " +
+    pill(x.result, x.result === "tested" || x.result === "report only" ? "ok" : x.result === "testing" ? "" : "off") + "</div>";
+  h += '<p class="small">RipperPS saw <b>' + esc(x.kind || "nothing it knows") + "</b>" + (x.title ? " · " + esc(x.title) : "") +
+    (x.profile ? ' <span class="muted">(' + esc(x.profile) + ")</span>" : "") + "<br>" + esc(x.outcome) +
+    (x.can ? '<br><span class="muted">Can make here: ' + esc(x.can) + "</span>" : "") + "</p>";
+  if (x.signs) h += '<pre class="findings">' + esc(x.signs) + "</pre>";
+  if (x.findings) h += '<details><summary class="small">The drive test\'s findings</summary><pre class="findings">' + esc(x.findings) + "</pre></details>";
+  if (editable) {
+    h += '<div class="row"><select data-said="' + x.n + '" aria-label="What disc ' + x.n + ' is">' + systemChoices(x.said) + "</select>" +
+      '<input data-note="' + x.n + '" placeholder="The game or disc\'s name, region, anything odd" value="' + esc(x.note) + '"></div>';
+  }
+  return h + "</div>";
+}
+function renderDriveTest() {
+  var g = state.dt || {}, panel = $("dtPanel");
+  if (!panel) return;
+  var active = g.state === "waiting" || g.state === "testing" || g.state === "finishing";
+  // Redraw only when something changed that the person isn't typing in.
+  var key = g.state + ":" + g.prompt + ":" + g.testing + ":" + g.file + ":" + (g.discs || []).map(function (x) { return x.result; }).join(",") +
+    ":" + (state.drives || []).map(function (d) { return d.id + d.state; }).join(",");
+  if (state.dtKey === key) { var bar = $("dtBar"); if (bar && g.total) bar.style.width = Math.round(100 * g.done / g.total) + "%"; return; }
+  state.dtKey = key;
+  var h = '<div class="card">';
+  if (!g.state || g.state === "idle") {
+    h += "<h2>Drive test</h2><p>Help RipperPS support more drives. Pick a drive, then put in discs one after another: games of any system, music CDs, " +
+      "movies, even ones you think won't read. RipperPS tests each as it goes in and tells you when to put in the next.</p>" +
+      '<p class="muted">It only reads: nothing is written to the disc or the drive. At the end you get a zip to attach to the drive report form on GitHub. ' +
+      "Nothing is sent anywhere by itself.</p>" +
+      '<p class="muted">Drives with custom firmware (Kreon, OmniDrive, LibreDrive) are the most useful to hear about. Any disc helps; these help most:</p>' +
+      wantedTable();
+    (state.drives || []).forEach(function (d) {
+      h += '<div class="row"><span>' + esc(d.label) + ' <span class="muted small">' + esc([d.vendor, d.product].filter(Boolean).join(" ")) + "</span></span>" +
+        '<button class="fixed" data-dtstart="' + esc(d.id) + '"' + (d.state === "ripping" ? " disabled" : "") + ">Start</button></div>";
+    });
+    if (!(state.drives || []).length) h += '<p class="muted">No drives found. Plug in a USB drive and wait a few seconds.</p>';
+  } else {
+    h += "<h2>" + esc(g.drive_name || g.drive_label) + '</h2><p class="muted small">' + esc(g.drive_label) + (g.reads ? " · reads " + esc(g.reads) : "") +
+      (g.firmware ? "<br>Firmware: " + esc(g.firmware) : "") + "</p>";
+    h += '<div class="notice dtprompt' + (g.state === "done" ? " okline" : "") + '"><b' + (g.state === "testing" ? ' class="pulse"' : "") + ">" + esc(g.prompt) + "</b>";
+    if (g.state === "testing") h += '<div class="bar" style="margin-top:8px"><i id="dtBar" style="width:' + (g.total ? Math.round(100 * g.done / g.total) : 0) + '%"></i></div><p class="muted small">' + esc(g.step) + "</p>";
+    h += "</div>";
+    if (g.state === "failed" && g.error) h += '<p class="err small">' + esc(g.error) + "</p>";
+    if (active) h += '<details' + ((g.discs || []).length ? "" : " open") + '><summary>Which discs help most</summary>' + wantedTable() + "</details>";
+    if (active) {
+      var d = find(state.drives, "id", g.drive);
+      h += '<div class="row">' + (d && d.state !== "empty" && g.state !== "testing" ? '<button id="dtEject">Eject</button>' : "") +
+        '<button class="primary" id="dtFinish">Finish</button><button class="danger" id="dtDiscard">Throw away</button></div>';
+    }
+    if (g.state === "done" && g.file) {
+      h += '<ol class="dtsteps"><li><a class="button primary" href="/api/drivetest/file?name=' + encodeURIComponent(g.file) + '" download="' + esc(g.file) + '">Download the zip</a></li>' +
+        '<li><a class="button" href="' + esc(dtFormUrl(g)) + '" target="_blank" rel="noopener">Open the drive report form</a> and attach the zip to it. ' +
+        '<span class="muted small">A GitHub account is needed to send it.</span></li></ol>' +
+        '<p class="muted small">The zip stays on the console in /data/ripper/diag. Changing what a disc is below updates it.</p>' +
+        '<div class="row"><button id="dtAgain">Test another drive</button><button id="dtClose">Close</button></div>';
+    }
+  }
+  h += "</div>";
+  if (g.discs && g.discs.length) {
+    h += '<div class="card"><h3>Discs</h3><p class="muted small">Say what each disc really is: that\'s how we learn where RipperPS got it wrong.</p>';
+    g.discs.slice().reverse().forEach(function (x) { h += dtDisc(x, g.state !== "failed"); });
+    h += "</div>";
+  }
+  panel.innerHTML = h;
+  each("[data-dtstart]", function (b) { b.onclick = function () { startDriveTest(b.dataset.dtstart); }; });
+  if ($("dtEject")) $("dtEject").onclick = function () { api("POST", "/api/drives/" + g.drive + "/eject").then(loadDrives).catch(function (e) { toast(e.message, true); }); };
+  if ($("dtFinish")) $("dtFinish").onclick = function () { api("POST", "/api/drivetest/finish").then(loadDriveTest).catch(function (e) { toast(e.message, true); }); };
+  if ($("dtDiscard")) $("dtDiscard").onclick = function () {
+    var b = $("dtDiscard");
+    if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "Throw it all away?"; return; }
+    api("POST", "/api/drivetest/discard").then(loadDriveTest);
+  };
+  if ($("dtClose")) $("dtClose").onclick = function () { api("POST", "/api/drivetest/discard").then(loadDriveTest); };
+  if ($("dtAgain")) $("dtAgain").onclick = function () { api("POST", "/api/drivetest/discard").then(loadDriveTest); };
+  each("[data-said]", function (el) { el.onchange = function () { saveDiscLabel(+el.dataset.said, { said: el.value }); }; });
+  each("[data-note]", function (el) { el.onchange = function () { saveDiscLabel(+el.dataset.note, { note: el.value }); }; });
+}
+function saveDiscLabel(n, body) {
+  body.n = n;
+  api("POST", "/api/drivetest/disc", body).then(function () {
+    var x = state.dt && find(state.dt.discs, "n", n);
+    if (x) { if (body.said !== undefined) x.said = body.said; if (body.note !== undefined) x.note = body.note; }
+    toast("Saved");
+  }).catch(function (e) { toast(e.message, true); });
+}
+
 /* ---------- Log ---------- */
 
 function loadLog() { return api("GET", "/api/log").then(function (t) { var p = $("logText"); p.textContent = t; p.scrollTop = p.scrollHeight; }); }
@@ -698,13 +827,9 @@ $("refreshLog").onclick = loadLog;
 /* ---------- Polling ---------- */
 
 function loadAll() {
-  if (!state.diagLoaded) {
-    state.diagLoaded = true;
-    api("GET", "/api/diagnose").then(function (g) { state.diag = g; state.rendered = {}; if (g.state === "running") pollDiag(); });
-  }
-  return Promise.all([loadJobs(), loadDrives()]).then(function () {
+  return Promise.all([loadJobs(), loadDrives(), loadDriveTest()]).then(function () {
     $("conn").textContent = state.status ? "v" + state.status.version + " · " + state.status.ip : "Connected";
-  }).catch(function () { $("conn").textContent = "Can't reach ripper"; });
+  }).catch(function () { $("conn").textContent = "Can't reach RipperPS"; });
 }
 
 Promise.all([api("GET", "/api/status"), api("GET", "/api/catalog"), api("GET", "/api/settings")]).then(function (r) {
@@ -713,7 +838,7 @@ Promise.all([api("GET", "/api/status"), api("GET", "/api/catalog"), api("GET", "
   if (!$(tab) || tab === "modal") tab = "drives";
   showTab(tab);
   return loadAll();
-}).catch(function () { $("conn").textContent = "Can't reach ripper"; });
+}).catch(function () { $("conn").textContent = "Can't reach RipperPS"; });
 (function next() { setTimeout(function () { if (state.catalog) loadAll(); next(); }, 1500); })();
 </script>
 </body>

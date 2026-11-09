@@ -329,7 +329,7 @@ void jobs_init(void) {
       // ripper stopped (a crash, the console turned off) with it running.
       j->state = JOB_FAILED;
       svc_str_copy(j->error, sizeof(j->error),
-                   !strcmp(st, "ripping") ? "ripper stopped during the rip" : "ripper stopped while sending it");
+                   !strcmp(st, "ripping") ? "RipperPS stopped during the rip" : "RipperPS stopped while sending it");
       j->ripped = j->ripped && !strcmp(st, "delivering");
       j->finished = svc_now();
     }

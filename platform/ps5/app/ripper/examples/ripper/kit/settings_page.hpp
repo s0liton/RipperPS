@@ -53,6 +53,10 @@ class SettingsPage
             awake,
             tmdb,
             drive_test, // key: the drive
+            test_disc,  // index: the disc's number in the test
+            test_eject, // key: the drive
+            test_finish,
+            test_discard,
             destination, // index: settings().destinations
             add_destination,
             profile, // key: the system
@@ -100,6 +104,7 @@ class SettingsPage
     mutable QrCode qr_;
     mutable std::string qr_for_;
     int awake_ = 0; // the keep-awake choice
+    bool discard_armed_ = false; // Throw away asks once more
 };
 
 } // namespace ripper

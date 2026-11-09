@@ -1,118 +1,152 @@
 # ripper
 
-A PS5 payload that rips optical discs into the formats emulators and archivists use. It reads through the console's own Blu-ray drive today, and is built so that USB drives with more capabilities (CD laser, OmniDrive, Kreon, LibreDrive) unlock more disc types later without changing the core.
+A PS5 app that lets you rip your movie/music/game discs into the well known formats. My PS5 already had a perfectly good Blu-ray drive just sitting there, so I figured why not make it rip everything I own. It reads through the console's own drive and any USB drive you plug in, and sends the rips to the console, a USB disk, your NAS or your RomM server.
 
-It needs a jailbroken console (any firmware with a public kernel exploit). Disc access only uses the kernel's standard CAM pass-through, so it does not depend on kstuff or a hypervisor exploit.
+- **Rip from any drive**
+  - Use the PS5's own Blu-ray drive, or plug in any USB CD, DVD or Blu-ray drive. Use both at the same time if you want.
+- **Formats you actually use**
+  - CHD, BIN/CUE and ISO for games, MKV and MP4 for movies, and FLAC, MP3 and friends for music, tagged and with cover art.
+- **Decrypts on the fly**
+  - DVD movies come out decrypted, and so do PS3 discs if you have the keys.
+- **Sends rips wherever you keep them**
+  - Keep them on the console or a USB disk, or send them to SMB, NFS, FTP or straight into RomM. If you already use RommPS, ripper can pick up your RomM server from it.
+- **PS4 and PS5 games**
+  - Dumps your installed games, whether they came from a disc or not.
+- **RipperPS and a Web UI**
+  - Rip from the couch with the native app, or from your phone or PC on the same network.
+- **Frequently updated, AI-free, and thoroughly tested.**
 
-## Status
+## Help us test: send a drive report
 
-| Disc | PS5 drive | Output | State |
+RipperPS supports far more discs than I've been able to test. Not only this, but the drive you use dictates what we can rip. The built-in drive, a stock USB DVD writer and an LG Blu-ray drive with LibreDrive, OmniDrive or Kreon firmware all behave differently. We know most formats work, but there are some we need custom firmware drives like (Xbox, Xbox 360, Dreamcast, etc) which I don't have.
+
+That's where you come in. I have created a drive/disc test inside the app that you can run for me. It reads your type of drive, and any discs you enter. Look below to see which we need more samples of. Once done, it generates a test file, and you send it in a GitHub issue to us. This will be an immense help, and I appreciate every test.
+
+1. Open **Drive test** (it's a tab in the web UI, and in Settings in RipperPS) and hit **Start** next to your drive.
+2. Pop your discs in one at a time. It'll tell you when to swap, and you tell it what each disc is.
+3. Hit **Finish**, download the zip and attach it to the [drive report form](https://github.com/s0liton/ripper/issues/new?template=drive-report.yml).
+
+Most wanted:
+
+| Disc | Drive |
+|---|---|
+| GameCube, Wii | OmniDrive |
+| Xbox, Xbox 360 | Kreon or OmniDrive |
+| Wii U | OmniDrive Blu-ray drive |
+| Dreamcast | a CD drive that reads GD-ROMs |
+| Saturn, Sega CD, PC Engine CD, 3DO, CD-i | any CD drive |
+| PS4, PS5, Xbox One / Series | any USB Blu-ray drive |
+| Blu-ray movies | any Blu-ray drive |
+
+The full walkthrough is in the [tester guide](docs/drive-test.md).
+
+Note: Your privacy is fully preserved. No unique IDs about your console, drives, or games are collected in this test.
+
+## What it rips
+
+| Disc | Drive | Output | Tested on hardware |
 |---|---|---|---|
-| PS2 DVD | yes | ISO | working, CHD planned |
-| PS3 BD / DVD | yes | decrypted ISO (RPCS3) | working, needs a key file; folder output planned |
-| DVD / Blu-ray data, PC games | yes | ISO | working |
-| DVD-Video | yes | ISO | unprotected discs only; CSS planned |
-| Blu-ray Video | yes | ISO (AACS stays encrypted) | working when the disc has ISO 9660; UDF detection planned |
-| PS4 / PS5 | identify only | game folder via system dumper | planned |
-| PS1, PS2 CD, audio and other CDs | no CD laser | BIN/CUE, CHD, FLAC | planned, external drive |
-| GameCube, Wii, Xbox, Xbox 360 | no | RVZ, XISO, ISO | planned, OmniDrive/Kreon drive |
+| PS2 DVD | built-in or USB DVD | ISO, CHD | yes |
+| PS3 Blu-ray / DVD | built-in | ISO, decrypted with a key file | partly |
+| PS4 / PS5 | built-in | game dump (folder, `.ffpkg` or `.exfat`) | yes, once the game is installed |
+| DVD-Video | built-in or USB DVD | MKV, MP4, ISO | yes |
+| Blu-ray Video | built-in or USB Blu-ray | ISO (still encrypted) | not yet |
+| DVD / Blu-ray data, PC discs | built-in or USB | ISO, CHD | not yet |
+| Audio CD | USB | FLAC, MP3, AAC, ALAC, Opus, WAV | yes, FLAC and MP3 |
+| PS1, PS2 CD | USB | BIN/CUE, CHD | yes |
+| Saturn, Sega CD, PC Engine CD, PC-FX, Neo Geo CD, 3DO, CD-i, Video CD | USB | CHD, BIN/CUE | not yet |
+| Dreamcast | USB drive that reads GD-ROMs | GDI | not yet |
+| Xbox, Xbox 360 | USB with Kreon or OmniDrive | ISO | not yet |
+| GameCube, Wii, Wii U | USB with OmniDrive | ISO, WUD | not yet |
+| Xbox One / Series | USB Blu-ray | ISO (still encrypted) | not yet |
 
-The host tests cover everything marked working. Nothing has run on a console yet; see [Unverified on hardware](#unverified-on-hardware).
+"Not yet" means I haven't been able to try it on a real disc. That's where your [drive reports](#help-us-test-send-a-drive-report) come in.
 
-## How it works
+##Experimental Notice
 
-```
- drive ──transport──> drive probe ──> disc identify ──> plan (recipes × caps) ──> rip ──> image + manifest
-          CAM (PS5)     caps bits       profile + ISO 9660     what is possible       hash, decrypt, rename
-          SG_IO (Linux)
-          fake (tests)
-```
+This app is considered experimental and may have any number of problems. While it has worked really well in my personal day to day testing, I will need to refine the app more before I can say comfortably that you can let it watch your kids. Please help by reporting any bugs, and PLEASE submit drive tests as detailed above to help me confirm and support all the possible DVD players. 
+  
+  
+I plan for the app to be out of experimental state by end of this year.
+## Requirements
 
-- **Transport** (`include/ripper/transport.h`) sends one SCSI/MMC command. The PS5 uses FreeBSD CAM through `/dev/xpt0` and `/dev/passN`. Linux uses `SG_IO`, so the same code runs against a PC drive while developing.
-- **Drive probe** (`drive.h`) turns INQUIRY and GET CONFIGURATION into capability bits: CD/DVD/BD read, C2, PlayStation vendor profiles, and slots for vendor features.
-- **Disc identify** (`disc.h`) starts from the drive profile. The PS5 drive reports PlayStation discs with vendor profiles (`0xFF61` PS2 DVD, `0xFF71` PS3 BD, …). A PC drive reports a plain DVD/BD, so the disc's ISO 9660 file system decides: `SYSTEM.CNF`, `PS3_DISC.SFB`, `VIDEO_TS`, `BDMV`.
-- **Recipes** (`rip.h`) map a disc kind to an output and the capabilities it needs. The UI shows each one as available, needs another drive, planned, or blocked.
-- **Rip** reads in 128 KiB chunks, retries bad sectors one at a time, hashes (CRC-32, MD5, SHA-1) while writing `<name>.iso.part`, and renames the file when it is complete.
-- **PS3**: the dump's SHA-1 is looked up in the key file. A match renames the image to its Redump name and decrypts it in place. Without a key the image stays encrypted, and a `<stem>.key` or `<stem>.dkey` dropped next to it can be used later.
-- **Manifest** `<name>.txt` records the disc, the drive and the hashes of the image as read. For PS3 these hashes are of the encrypted original, which is what Redump lists.
+- A jailbroken PS5 with an ELF loader (etaHEN or similar)
+- A USB drive for CDs (music, PS1 and other CD games), since the PS5's drive can't read them
+- For PS3 discs, a key file (not included, don't ask)
+
+## Install
+
+ripper will be on ProsperoStore once it's out of pre-release. Until then, it's a manual install.
+
+### Manual Install
+
+Download `PPSA76700.zip` from the [releases page](https://github.com/s0liton/ripper/releases), unzip it and copy the `PPSA76700` folder to `/data/homebrew/` on the console. Add it with your launcher (ShadowMountPlus or similar) and launch RipperPS. It'll start the background service for you.
+
+If you'd rather run just the payload, without the app:
+1. Download the latest `ripper.elf` from the releases page.
+2. Send it to the console (or use whichever favorite tool you wish):
+   ```sh
+   nc -w 1 <ps5-ip> 9021 < ripper.elf
+   ```
+3. Open `http://<ps5-ip>:8790` from another device.
+
+### How it runs
+
+All the ripping is done by a background payload, so you can close RipperPS and keep **gaming** (or watch whatever you just ripped). It keeps the console awake while it rips, so rest mode won't cut a rip short. It doesn't autostart yet, so after a reboot just open RipperPS again, or resend `ripper.elf`.
+
+## Updates
+
+Copy the new release's folder over the old one. RipperPS swaps in its new payload the next time you open it, once nothing is ripping. An older version never replaces a newer one. If you only run the payload, just send the new `ripper.elf`.
+
+## Setup
+
+Everything lives in Settings, in RipperPS or the web UI.
+
+- **Destinations:** where your rips go. "This console" is there out of the box. Add a USB disk, SMB, NFS, FTP or RomM (sign in with the code it shows you).
+- **Disc types:** what each kind of disc rips to by default. PS1 to CHD on RomM, music CDs to FLAC on your NAS, whatever you like.
+- **PS3 key file:** goes in `/data/ripper/keys/ps3.keys`.
+- **TMDB key:** optional, but it gets you proper movie names and posters.
+
+## Ripping
+
+Pop a disc in. ripper figures out what it is and fills in the format and destination from your settings. Change whatever you want for that disc and hit **Rip**. You can follow it in the Queue, and the disc pops out when it's done.
+
+PS4 and PS5 discs need to be installed first, then you can dump them. The **Games** tab dumps any installed game.
+
+## Web UI
+
+ripper exposes a Web UI at `http://<ps5-ip>:8790` where you can do everything the app does, plus read the log.
+
+## Problems
+
+- **The web UI won't open:** if the console was in rest mode when you sent the payload, it never got there. Wake it up and send `ripper.elf` again.
+- **"Can't be ripped here":** check [What it rips](#what-it-rips). A lot of discs need a USB drive.
+- **Anything else:** on the Log tab, hit **Download reports** and attach the zip to an [issue](https://github.com/s0liton/ripper/issues/new). I'll take a look.
 
 ## Building
 
-### Host (tests and CLI)
-
 ```sh
-cmake -S . -B build/host -G Ninja
-cmake --build build/host
-(cd build/host && ctest --output-on-failure)
+cmake -S . -B build/host -G Ninja && cmake --build build/host   # host build: tests, ripper-cli, ripperd
+(cd build/host && ctest --output-on-failure)                     # tests
+tools/ps5-build.sh                                               # PS5 payload in Docker, build/ps5/ripper.elf
 ```
 
-`ripper-cli` drives the same core:
+How the code fits together, building RipperPS and everything else for devs is in [docs/development.md](docs/development.md).
 
-```sh
-ripper-cli probe --device /dev/sr0
-ripper-cli rip --device /dev/sr0 --out out --keys ps3.keys
-ripper-cli rip --image dump.iso --profile ps3-bd --keys ps3.keys
-ripper-cli ps3-decrypt --in encrypted.iso --key <32 hex>   # or --d1 <32 hex>
-```
+## Watch Development Progress
 
-### PS5 payload
+I've started streaming the development of this app as well as other side projects on my YouTube channel. Nothing serious, but you can catch me live streaming. ;)
 
-Install the [PS5 payload SDK](https://github.com/ps5-payload-dev/sdk), then:
+[My Channel](https://www.youtube.com/@soliton_radar)
 
-```sh
-$PS5_PAYLOAD_SDK/bin/prospero-cmake -S . -B build/ps5
-cmake --build build/ps5
-PS5_HOST=<console ip> cmake --build build/ps5 --target deploy   # sends ripper.elf to the ELF loader on port 9021
-```
+## P.S to the industry
 
-## Running on the console
+If buying isn't **owning**, then piracy **isn't** stealing. 🖕
 
-1. Jailbreak the console and start an ELF loader.
-2. Optional: copy `config/ripper.ini.example` to `/data/ripper/ripper.ini`.
-3. For PS3, put the key file at `/data/ripper/keys/ps3.keys` (see below).
-4. Send `ripper.elf`. It posts a notification when it is ready, then rips every disc you insert.
-5. Output goes to `/data/ripper/out` by default. Progress and errors go to klog and on-screen notifications.
+## Shameless Plug
 
-## PS3 keys
+<a href='https://ko-fi.com/M7G128GENT' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi4.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
 
-Keys are not part of this repository. Build the key file from a Redump PS3 DAT and the matching key files:
+## License
 
-```sh
-python3 tools/build_ps3_keydb.py --dat "Sony - PlayStation 3.dat" --keys ps3_keys/ --out ps3.keys
-```
-
-`--keys` takes a directory or a zip of `<Redump name>.key` (16 raw bytes) or `.dkey` (32 hex characters) files. Each output line is `<sha1> <size> <key> <name>`.
-
-## Layout
-
-```
-include/ripper/   public headers of the core library
-src/core/         portable C11: MMC commands, drive probe, ISO 9660, SFO, PS3 crypto, hashes, rip pipeline
-src/platform/ps5/ CAM transport, notifications, the payload's main loop
-src/platform/linux/ SG_IO transport and ripper-cli
-tests/            fake MMC drive, ISO 9660 image builder, unit and end-to-end tests
-tools/            key file builder
-config/           example configuration
-```
-
-## Unverified on hardware
-
-These are written from documentation and prior work, and need checking on a console:
-
-- The `union ccb` size assertion (`0x4E0`) and the pass-through lookup for `cd0` against the current SDK headers.
-- Reading through `/dev/cd0` (the default on the PS5) versus READ(12) through pass-through, especially for PS3 discs.
-- Treating `cd1`+ as external USB drives. It is not yet known whether USB optical drives attach as `cd` devices at all.
-- `/mnt/disc` as the system mount for PS4/PS5 title IDs.
-- Whether `PS3_GAME/PARAM.SFO` is in the unencrypted region on every PS3 disc. If not, the title falls back to the Redump name after hashing.
-
-## Roadmap
-
-1. Run on a console. Confirm the items above and measure read speed.
-2. Add a CHD writer for PS2 DVD and later CD images.
-3. Add a PS3 folder output for RPCS3. Decrypt while reading when the key can be chosen up front, to save a second pass.
-4. Add a menu or web UI to pick a recipe instead of `auto_rip`.
-5. External drives: detect them, then add CD (BIN/CUE, subchannel, C2), OmniDrive, Kreon and LibreDrive recipes.
-6. PS4/PS5: hand off to a system dumper on firmware where kstuff runs.
-7. Video: CSS for DVD, AACS keydb for Blu-ray, and a UDF reader.
-
-Drive access follows the approach shown by [ps-disc-detect](https://github.com/Al-Azif/ps-disc-detect).
+GPL-3.0. [libdvdcss](https://www.videolan.org/developers/libdvdcss.html) is GPL-2.0-or-later. [cJSON](https://github.com/DaveGamble/cJSON) and [QR Code generator](https://www.nayuki.io/page/qr-code-generator-library) are MIT. idlesauce's [ps5-self-pager](https://github.com/idlesauce/ps5-self-pager) is Unlicense. The game name database comes from [Redump](http://redump.org) (CC-BY-SA-4.0). Drive access follows [ps-disc-detect](https://github.com/Al-Azif/ps-disc-detect), and the custom firmware reads follow [redumper](https://github.com/superg/redumper). RipperPS is built on mihawk-99's [PS5 Vulkan Template](https://github.com/mihawk-99/PS5_VulkanTemplate) and BlackBearReloaded's UI kit; its licenses are in [its README](platform/ps5/app/ripper/README.md).

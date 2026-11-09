@@ -830,7 +830,7 @@ void App::tick(float dt, hui::gfx::Renderer *renderer) {
     if (pairing_.status == "pending" && pair_timer_ >= kPairEvery && !pair_busy_)
       refresh_pairing();
     test_timer_ += dt;
-    if (test_.state == "running" && test_timer_ >= 1.5f && !test_busy_)
+    if (test_.active() && test_timer_ >= 1.5f && !test_busy_)
       refresh_drive_test();
   }
 
@@ -1342,7 +1342,7 @@ void App::dump(const Game &g, const std::string &destination, const std::string 
 void App::refresh_drive_test() {
   test_timer_ = 0;
   test_busy_ = true;
-  api_.get("/api/diagnose", [this](const Response &r) {
+  api_.get("/api/drivetest", [this](const Response &r) {
     test_busy_ = false;
     Json j = parse(r);
     if (!r.ok() || !j)
@@ -1350,33 +1350,63 @@ void App::refresh_drive_test() {
     DriveTest t;
     t.state = str(j.get(), "state");
     t.drive = str(j.get(), "drive");
+    t.drive_label = plain(str(j.get(), "drive_label"));
+    t.drive_name = plain(str(j.get(), "drive_name"));
+    t.firmware = plain(str(j.get(), "firmware"));
+    t.prompt = plain(str(j.get(), "prompt"));
     t.step = plain(str(j.get(), "step"));
     t.file = str(j.get(), "file");
     t.error = plain(str(j.get(), "error"));
-    t.drive_name = plain(str(j.get(), "drive_name"));
-    t.disc = plain(str(j.get(), "disc"));
-    t.findings = plain(str(j.get(), "findings"));
     t.done = num(j.get(), "done");
     t.total = num(j.get(), "total");
-    t.commands = num(j.get(), "commands");
-    t.answered = num(j.get(), "answered");
+    const cJSON *d = nullptr;
+    cJSON_ArrayForEach(d, cJSON_GetObjectItemCaseSensitive(j.get(), "discs")) {
+      TestDisc x;
+      x.n = static_cast<int>(num(d, "n"));
+      x.kind = plain(str(d, "kind"));
+      x.title = plain(str(d, "title"));
+      x.outcome = plain(str(d, "outcome"));
+      x.result = str(d, "result");
+      x.said = plain(str(d, "said"));
+      x.signs = plain(str(d, "signs"));
+      t.discs.push_back(std::move(x));
+    }
     test_ = std::move(t);
   });
 }
 
 void App::start_drive_test(const std::string &drive) {
-  api_.post("/api/drives/" + drive + "/diagnose", "{}", [this](const Response &r) {
+  api_.post("/api/drives/" + drive + "/drivetest", "{}", [this](const Response &r) {
     if (!r.ok()) {
       say("Couldn't start the drive test: " + r.message());
       return;
     }
-    test_.state = "running";
+    test_.state = "waiting";
     refresh_drive_test();
   });
 }
 
-void App::cancel_drive_test() {
-  api_.post("/api/diagnose/cancel", "{}", [this](const Response &) { refresh_drive_test(); });
+void App::finish_drive_test() {
+  api_.post("/api/drivetest/finish", "{}", [this](const Response &r) {
+    if (!r.ok())
+      say("Couldn't finish the drive test: " + r.message());
+    refresh_drive_test();
+  });
+}
+
+void App::discard_drive_test() {
+  api_.post("/api/drivetest/discard", "{}", [this](const Response &) { refresh_drive_test(); });
+}
+
+void App::label_test_disc(int n, const std::string &said) {
+  for (TestDisc &d : test_.discs)
+    if (d.n == n)
+      d.said = said;  // shown at once; the next refresh confirms it
+  api_.post("/api/drivetest/disc", "{\"n\":" + std::to_string(n) + ",\"said\":" + json_string(said) + "}",
+            [this](const Response &r) {
+              if (!r.ok())
+                say("Couldn't save that: " + r.message());
+            });
 }
 
 void App::keep_awake(int minutes) {

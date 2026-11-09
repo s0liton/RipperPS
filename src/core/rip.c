@@ -156,7 +156,8 @@ size_t rip_plan(const struct rip_drive *drive, const struct rip_disc *disc, stru
     c->recipe = r;
     c->avail = RIP_AVAIL_OK;
     c->reason = "";
-    if (r->needs & ~caps) {
+    // An Xbox game partition that reads as it is needs no unlock.
+    if ((r->needs & ~caps & ~(disc->xbox_partition ? RIP_CAP_XBOX : 0u)) != 0) {
       c->avail = RIP_AVAIL_NEEDS_DRIVE;
       c->reason = missing_caps_reason(r->needs & ~caps);
     } else if ((r->id == RIP_RECIPE_MKV || r->id == RIP_RECIPE_MP4) &&
@@ -689,7 +690,8 @@ int rip_run(const struct rip_recipe *recipe, struct rip_drive *drive, struct rip
   }
   RIP_INFO("ripping %s -> %s (%s)", rip_disc_kind_name(disc->kind), res->image_path, recipe->output);
 
-  if (is_nintendo(disc->kind) || disc->kind == RIP_DISC_XBOX || disc->kind == RIP_DISC_XBOX_360) {
+  if (is_nintendo(disc->kind) ||
+      ((disc->kind == RIP_DISC_XBOX || disc->kind == RIP_DISC_XBOX_360) && !disc->xbox_partition)) {
     rc = dump_custom(drive, reader, disc, res->image_path, opts, &res->hashes);
   } else if (disc->css) {
     // DVD-Video: the drive authenticated, the VOBs descrambled as they're read.
