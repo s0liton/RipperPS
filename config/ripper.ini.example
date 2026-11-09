@@ -1,0 +1,19 @@
+# Copy to /data/ripper/ripper.ini on the console. Every key is optional.
+
+# Where images and manifests go. A USB drive works too, e.g. /mnt/usb0/ripper.
+out_dir=/data/ripper/out
+
+# PS3 key file built with tools/build_ps3_keydb.py.
+ps3_keys=/data/ripper/keys/ps3.keys
+
+# 1 keeps the encrypted PS3 image (the one Redump hashes) next to the decrypted one.
+# Needs twice the space.
+ps3_keep_encrypted=0
+
+# 1 rips as soon as a disc is identified. 0 only identifies and notifies.
+auto_rip=1
+
+# Single-sector retries before a read error stops the rip.
+read_retries=3
+
+verbose=0

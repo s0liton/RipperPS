@@ -1,0 +1,20 @@
+build/
+test-tmp-*/
+*.elf
+*.iso
+*.part
+*.keys
+*.key
+*.dkey
+.vscode/
+.cache/
+.DS_Store
+__pycache__/
+compile_commands.json
+
+# Redump key archives: never published with the code
+REDUMP_*.7z
+
+# ripperd's data folders on the PC (settings, jobs, the log, fixtures)
+host-data/
+host-rommps/

@@ -1,0 +1,6 @@
+ps5-self-pager by idlesauce, https://github.com/idlesauce/ps5-self-pager
+commit e98146660633c82766df46b77025d9b2d9c36597. Unlicense (public domain), LICENSE.
+
+Files taken unchanged: selfpager.c, selfpager.h. It decrypts SELFs (eboot.bin, .prx,
+.sprx) through the kernel's SELF pager on firmware 1.00 to 13.40. Used by
+src/platform/ps5/ps4dump.c.

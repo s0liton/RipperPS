@@ -1,0 +1,45 @@
+/* Ripper's own pieces, on the theme tokens RommPS's style.css defines. */
+.small { font-size: 14px; }
+.drivetabs { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+.drivetab { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 200px; text-align: left; border-radius: var(--radius-card); padding: 12px 18px; }
+.drivetab.active { background: var(--primary); color: var(--on-primary); }
+.drivetab small { font-size: 14px; color: var(--text-muted); }
+.drivetab.active small { color: inherit; opacity: .8; }
+.drivetab small.ok { color: var(--ok); } .drivetab small.warn { color: var(--warn); } .drivetab small.busy { color: var(--accent-text); }
+.drivetab.active small.ok, .drivetab.active small.warn, .drivetab.active small.busy { color: inherit; }
+.waiting { text-align: center; padding: 40px 10px; }
+.waiting h2 { margin: 18px 0 4px; font-size: 26px; }
+/* A disc drawn with gradients: no image files to embed. */
+.discicon { width: 120px; height: 120px; margin: 0 auto; border-radius: 50%;
+  background: radial-gradient(circle, var(--page) 0 11%, var(--outline) 11% 13%, transparent 13%),
+              conic-gradient(from 30deg, var(--primary), var(--accent-text), var(--surface-raised), var(--primary));
+  opacity: .85; box-shadow: 0 6px 24px rgba(0, 0, 0, .35); }
+.discicon.small { width: 72px; height: 72px; margin: 0; flex: 0 0 72px; }
+.discicon.spin { animation: spin 1.4s linear infinite; }
+.discicon.cover { background-size: cover; background-position: center; box-shadow: 0 6px 18px rgba(0,0,0,.35); }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .discicon.spin { animation: none; } }
+.dischead { display: flex; gap: 18px; align-items: center; margin-bottom: 8px; }
+.dischead h2 { margin: 0 0 6px; }
+.sheet { border-top: var(--hairline); margin-top: 14px; padding-top: 6px; }
+.sheet h3 { margin-top: 10px; }
+.choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
+.choices .choice { margin: 0; }
+.choice span { display: block; font-size: 14px; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0 16px; }
+.formats { margin: 10px 0 14px; }
+.notice.okline { border-left-color: var(--ok); }
+.imageload { border-top: var(--hairline); margin-top: 18px; padding-top: 4px; }
+.dest .head { margin-bottom: 4px; }
+.profile summary b { font-size: 17px; }
+.profile .grid2 { margin-bottom: 6px; }
+.picklist { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; max-height: 50vh; overflow: auto; }
+.pickitem { text-align: left; }
+.savebar { position: -webkit-sticky; position: sticky; bottom: 16px; justify-content: flex-end; }
+.btns { display: flex; gap: 6px; }
+.row > select.fixed { width: auto; min-width: 240px; }
+.dest .row input { min-width: 0; }
+.code-inline { font-family: var(--font-mono); letter-spacing: 2px; color: var(--accent-text); }
+a.button { display: inline-block; background: var(--surface-raised); border: 2px solid var(--control-edge); border-radius: var(--radius); padding: 10px 18px; text-decoration: none; color: inherit; }
+a.button.primary { background: var(--primary); color: var(--on-primary); }
+pre.findings { white-space: pre-wrap; background: var(--surface-raised); border-radius: var(--radius); padding: 10px 14px; font: 14px/1.5 var(--font-mono); }

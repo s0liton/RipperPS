@@ -1,0 +1,4 @@
+gamedb.tsv: game serials and their Redump names, made by tools/gamedb.py from
+libretro-database's metadat/redump DATs (https://github.com/libretro/libretro-database),
+which carry Redump's (http://redump.org) names. Licensed CC-BY-SA-4.0 (LICENSE here),
+as is this derived table.

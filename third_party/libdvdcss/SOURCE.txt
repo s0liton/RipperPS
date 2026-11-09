@@ -1,0 +1,10 @@
+libdvdcss 1.4.3, from https://download.videolan.org/pub/libdvdcss/1.4.3/libdvdcss-1.4.3.tar.bz2
+(sha256 233cc92f5dc01c5d3a96f5b3582be7d5cee5a35a52d3a08158745d3d86070079). GPL-2.0-or-later, COPYING.
+
+Files taken: src/{libdvdcss.c,css.c,css.h,csstables.h,common.h,libdvdcss.h,device.c,device.h,ioctl.h,error.c},
+src/dvdcss/{dvdcss.h,version.h}. ioctl.c is left out: ripper implements ioctl.h's
+functions on its own SCSI transport (src/core/css.c). config.h is ripper's.
+
+One change: device.c's dvdcss_use_ioctls answers yes for streams when
+DVDCSS_RIPPER is defined, so a stream-backed handle still authenticates with
+the drive.
