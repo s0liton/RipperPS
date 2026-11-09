@@ -322,7 +322,7 @@ static void drive_identity(struct diag *d) {
       finding(d, "firmware: SpiralDrive (%.20s)", b + 36);
     } else if (b[4] + 5u < 86) {
       finding(d,
-              "firmware: INQUIRY is only %u bytes, too short to carry custom firmware's mark (some USB bridges cut it)",
+              "firmware: no custom firmware mark (INQUIRY is %u bytes, too short to carry one; a USB enclosure can cut it)",
               b[4] + 5u);
     } else {
       finding(d, "firmware: no OmniDrive or SpiralDrive mark (LibreDrive can't be seen from here)");
