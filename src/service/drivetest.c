@@ -327,6 +327,25 @@ static void write_log(const char *dir, const char *started) {
   free(log);
 }
 
+// "SONY     PS-SYSTEM   502R 1305" -> "SONY PS-SYSTEM 502R 1305": INQUIRY pads its fields with spaces.
+static void set_drive_name(const char *name) {
+  size_t k = 0;
+  int space = 0;
+
+  for (; *name && k + 1 < sizeof(g.drive_name); name++) {
+    if (*name == ' ') {
+      space = k > 0;
+      continue;
+    }
+    if (space && k + 2 < sizeof(g.drive_name)) {
+      g.drive_name[k++] = ' ';
+    }
+    space = 0;
+    g.drive_name[k++] = *name;
+  }
+  g.drive_name[k] = '\0';
+}
+
 /* Testing */
 
 static int claim(const char *id, struct drive_claim *c, const char *what) {
@@ -370,7 +389,7 @@ static void test_drive_alone(const char *id) {
     g.drive_answered = sum.answered;
     finding_line(sum.findings, "firmware: ", g.firmware, sizeof(g.firmware));
     if (sum.drive[0]) {
-      svc_str_copy(g.drive_name, sizeof(g.drive_name), sum.drive);
+      set_drive_name(sum.drive);
     }
   }
   pthread_mutex_unlock(&g_lock);
@@ -509,7 +528,7 @@ static void test_disc(const char *id, unsigned seq) {
   if (!g.drive_tested && sum.drive[0]) {
     // The drive's own findings came with the disc's.
     g.drive_tested = 1;
-    svc_str_copy(g.drive_name, sizeof(g.drive_name), sum.drive);
+    set_drive_name(sum.drive);
     finding_line(sum.findings, "firmware: ", g.firmware, sizeof(g.firmware));
   }
   pthread_mutex_unlock(&g_lock);
@@ -764,8 +783,12 @@ int drivetest_start(const char *drive_id, char *err, size_t en) {
   svc_str_copy(g.drive_label, sizeof(g.drive_label), jstr(drive, "label", drive_id));
   svc_str_copy(g.source, sizeof(g.source), jstr(drive, "source", ""));
   svc_str_copy(g.reads, sizeof(g.reads), jstr(drive, "reads", ""));
-  snprintf(g.drive_name, sizeof(g.drive_name), "%s %s %s", jstr(drive, "vendor", ""), jstr(drive, "product", ""),
-           jstr(drive, "revision", ""));
+  {
+    char name[128];
+    snprintf(name, sizeof(name), "%s %s %s", jstr(drive, "vendor", ""), jstr(drive, "product", ""),
+             jstr(drive, "revision", ""));
+    set_drive_name(name);
+  }
   localtime_r(&now, &tm);
   strftime(g.stamp, sizeof(g.stamp), "%Y%m%d-%H%M%S", &tm);
   strftime(g.started, sizeof(g.started), "%Y-%m-%d %H:%M:%S", &tm);
