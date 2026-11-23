@@ -82,7 +82,7 @@ I plan for the app to be out of experimental state by end of this year.
 
 ## Install
 
-ripper will be on ProsperoStore once it's out of pre-release. Until then, it's a manual install.
+RipperPS will be on ProsperoStore soon. Until then, it's a manual install.
 
 ### Manual Install
 

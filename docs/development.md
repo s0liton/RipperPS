@@ -150,7 +150,7 @@ To release:
 1. Bump the version in those three places and write `docs/releases/<tag>.md` (the release notes).
 2. Commit. The release is built from a clean commit, since RipperPS's notices name it.
 3. `tools/release.sh v0.1.0` builds and checks everything into `build/release/`: `PPSA76700.zip`, `ripper.elf` and `SHA256SUMS`.
-4. `tools/release.sh v0.1.0 --publish` does the same and publishes it as a GitHub pre-release.
+4. `tools/release.sh v0.1.0 --publish` does the same and publishes it as a GitHub release.
 
 CI (`.github/workflows/ci.yml`) runs the host tests, the ASan build and the payload build on every push.
 

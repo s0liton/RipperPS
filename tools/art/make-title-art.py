@@ -2,6 +2,7 @@
 """RipperPS's dashboard background, drawn from nothing but code.
 
     make-title-art.py OUT.png
+    make-title-art.py --wordmark OUT.png [--flat]
 
 A 3840x2160 picture for sce_sys/pic0.dds and pic1.dds (title-art.sh turns it
 into BC7): a disc lying in deep space at the heart of a spiral galaxy, torn at
@@ -9,6 +10,10 @@ its far rim like the icon, its data pouring out of the tear as a stream of bits
 and stars. The RipperPS wordmark sits at the lower left in Montserrat (OFL,
 third_party/Montserrat-Medium.ttf), its "PS" lit magenta to fuchsia. Every shape
 is drawn here.
+
+--wordmark writes the wordmark alone on a transparent background, cut to its
+own size: as it sits on the picture, with its shadow and glow, or with --flat
+only the letters.
 
 SPDX-License-Identifier: GPL-3.0-or-later
 """
@@ -230,14 +235,15 @@ def shade(canvas):
     canvas.alpha_composite(dark)
 
 
-def wordmark(canvas):
+def wordmark(canvas, flat=False):
     """"Ripper" in white, "PS" filled magenta to fuchsia, with a glow of its own."""
     font = ImageFont.truetype(str(FONT), 300)
     x, y = 250, 1700
     head = font.getlength("Ripper")
     shadow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     ImageDraw.Draw(shadow).text((x, y + 18), "RipperPS", font=font, fill=(0, 0, 0, 180), anchor="ls")
-    canvas.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(26)))
+    if not flat:
+        canvas.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(26)))
     ImageDraw.Draw(canvas).text((x, y), "Ripper", font=font, fill=(255, 255, 255, 255), anchor="ls")
 
     mask = Image.new("L", (W, H), 0)
@@ -249,13 +255,27 @@ def wordmark(canvas):
     gradient = Image.fromarray(fill.astype(np.uint8), "RGB").convert("RGBA")
     glow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     glow.paste(gradient, (0, 0), mask.filter(ImageFilter.MaxFilter(9)))
-    canvas.alpha_composite(glow.filter(ImageFilter.GaussianBlur(34)))
+    if not flat:
+        canvas.alpha_composite(glow.filter(ImageFilter.GaussianBlur(34)))
     letters = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     letters.paste(gradient, (0, 0), mask)
     canvas.alpha_composite(letters)
 
 
+def wordmark_alone(out, flat):
+    canvas = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    wordmark(canvas, flat)
+    left, top, right, bottom = canvas.getbbox()
+    pad = 0 if flat else 8
+    canvas = canvas.crop((max(left - pad, 0), max(top - pad, 0), min(right + pad, W), min(bottom + pad, H)))
+    canvas.save(out)
+    print(f"wordmark: {out} ({canvas.width}x{canvas.height})")
+
+
 def main():
+    if sys.argv[1] == "--wordmark":
+        wordmark_alone(Path(sys.argv[2]), "--flat" in sys.argv[3:])
+        return
     out = Path(sys.argv[1])
     rng = np.random.default_rng(7)
     img = space(rng)

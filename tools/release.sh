@@ -6,7 +6,7 @@
 #   build/release/SHA256SUMS
 #
 #   tools/release.sh v0.1.0              build and check everything
-#   tools/release.sh v0.1.0 --publish    then publish it as a GitHub pre-release (gh)
+#   tools/release.sh v0.1.0 --publish    then publish it as a GitHub release (gh)
 #
 # The version must already be the tag's in all three places (ps5.mk, svc.h,
 # RipperPS's param.json), and docs/releases/<tag>.md written: it's the release
@@ -67,8 +67,8 @@ cp "$ROOT/build/ps5/ripper.elf" "$OUT/ripper.elf"
 (cd "$OUT" && sha256sum "$TITLE.zip" ripper.elf > SHA256SUMS && cat SHA256SUMS)
 
 if [[ "$PUBLISH" == --publish ]]; then
-    echo "==> publishing $TAG as a pre-release"
-    gh release create "$TAG" --prerelease --target "$(git -C "$ROOT" rev-parse HEAD)" \
+    echo "==> publishing $TAG"
+    gh release create "$TAG" --target "$(git -C "$ROOT" rev-parse HEAD)" \
         --title "RipperPS $VERSION" --notes-file "$ROOT/docs/releases/$TAG.md" \
         "$OUT/$TITLE.zip" "$OUT/ripper.elf" "$OUT/SHA256SUMS"
 fi
