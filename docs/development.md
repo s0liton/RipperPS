@@ -143,14 +143,14 @@ It needs mihawk-99's PS5 stack in `../ps5-stack`. More in [its README](../platfo
 
 ## Versions and releases
 
-The version is in three places, which must match: `VERSION` in `src/platform/ps5/ps5.mk`, `RIPPER_VERSION` in `src/service/svc.h`, and `contentVersion` in RipperPS's `ps5/sce_sys/param.json` (0.2.0 is `00.002.000`). Each payload build is stamped `YYYYMMDD-HHMMSS`. RipperPS replaces a running payload with an older stamp than its own, and never a newer one.
+The version is in three places, which must match: `VERSION` in `src/platform/ps5/ps5.mk`, `RIPPER_VERSION` in `src/service/svc.h`, and `contentVersion` in RipperPS's `ps5/sce_sys/param.json` (0.1.0 is `00.001.000`). Each payload build is stamped `YYYYMMDD-HHMMSS`. RipperPS replaces a running payload with an older stamp than its own, and never a newer one.
 
 To release:
 
 1. Bump the version in those three places and write `docs/releases/<tag>.md` (the release notes).
 2. Commit. The release is built from a clean commit, since RipperPS's notices name it.
-3. `tools/release.sh v0.2.0` builds and checks everything into `build/release/`: `PPSA76700.zip`, `ripper.elf` and `SHA256SUMS`.
-4. `tools/release.sh v0.2.0 --publish` does the same and publishes it as a GitHub pre-release.
+3. `tools/release.sh v0.1.0` builds and checks everything into `build/release/`: `PPSA76700.zip`, `ripper.elf` and `SHA256SUMS`.
+4. `tools/release.sh v0.1.0 --publish` does the same and publishes it as a GitHub pre-release.
 
 CI (`.github/workflows/ci.yml`) runs the host tests, the ASan build and the payload build on every push.
 

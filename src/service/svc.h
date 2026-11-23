@@ -11,7 +11,7 @@
 #include "cJSON.h"
 
 #ifndef RIPPER_VERSION
-#define RIPPER_VERSION "0.2.0"
+#define RIPPER_VERSION "0.1.0"
 #endif
 #ifndef RIPPER_BUILD
 #define RIPPER_BUILD "dev"

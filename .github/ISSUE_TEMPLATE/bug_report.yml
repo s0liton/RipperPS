@@ -43,7 +43,7 @@ body:
     attributes:
       label: RipperPS version
       description: It's at the bottom of Settings in RipperPS, and at the top of the web UI.
-      placeholder: "0.2.0"
+      placeholder: "0.1.0"
     validations:
       required: true
   - type: input

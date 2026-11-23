@@ -16,7 +16,7 @@ ELF := $(OUT)/ripper.elf
 # The SDK's Mozilla CA bundle, built in: the console has no CA store for HTTPS (RomM).
 CA_BUNDLE := $(PS5_PAYLOAD_SDK)/target/user/homebrew/etc/ca-bundle.crt
 
-VERSION ?= 0.2.0
+VERSION ?= 0.1.0
 # Each build its own stamp: RipperPS tells the ripper it carries from the one
 # running by it (the "ripper-build:" mark in the ELF, /api/status's build).
 BUILD_STAMP := $(shell date -u +%Y%m%d-%H%M%S)

@@ -5,8 +5,8 @@
 #   build/release/ripper.elf      the payload on its own
 #   build/release/SHA256SUMS
 #
-#   tools/release.sh v0.2.0              build and check everything
-#   tools/release.sh v0.2.0 --publish    then publish it as a GitHub pre-release (gh)
+#   tools/release.sh v0.1.0              build and check everything
+#   tools/release.sh v0.1.0 --publish    then publish it as a GitHub pre-release (gh)
 #
 # The version must already be the tag's in all three places (ps5.mk, svc.h,
 # RipperPS's param.json), and docs/releases/<tag>.md written: it's the release
@@ -23,7 +23,7 @@ die() { echo "release: $*" >&2; exit 1; }
 
 [[ "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] || die "$TAG isn't a vX.Y.Z tag"
 VERSION="${TAG#v}"
-# The store tells consoles about an update from contentVersion: 0.2.0 is 00.002.000.
+# The store tells consoles about an update from contentVersion: 0.1.0 is 00.001.000.
 want=$(printf "%02d.%03d.%03d" "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}")
 have=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["contentVersion"])' "$APP/ps5/sce_sys/param.json")
 [[ "$have" == "$want" ]] || die "contentVersion is $have, $TAG needs $want ($APP/ps5/sce_sys/param.json)"

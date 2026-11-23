@@ -45,4 +45,4 @@ All official PS5 drives, whether internal or external (slim) are supported. Most
 > If you chose to ship, it would be treated with the utmost respect and care, and returned to you promptly after I experiment with it.
 
 # Release
-I am putting the final touches on what will be 1.0.0, and hope to release it within the next few days. Some final touches are waiting until RommPS's 1.3.1 release, which is a higher priority. If you wish to be pre-release tester, please open an issue or find me on the PS5 jailbreak Discord. Stay tuned!
+I am putting the final touches on what will be 0.1.0, the first alpha release, and hope to release it within the next few days. Some final touches are waiting until RommPS's 1.3.1 release, which is a higher priority. If you wish to be pre-release tester, please open an issue or find me on the PS5 jailbreak Discord. Stay tuned!
