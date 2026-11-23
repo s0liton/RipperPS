@@ -9,6 +9,7 @@
 #include "catalog.h"
 #include "details.h"
 #include "disc_report.h"
+#include "drivetest.h"
 #include "jobs.h"
 #include "platform.h"
 #include "ripper/common.h"
@@ -18,7 +19,6 @@
 #include "ripper/rip.h"
 #include "ripper/udf.h"
 #include "ripper/util.h"
-#include "drivetest.h"
 #include "settings.h"
 #include "svc.h"
 
@@ -63,6 +63,11 @@ struct slot {
   int64_t install_told;          // the last notification of how far it is (svc_now)
   char report_dir[SVC_PATH];     // the last disc report's folder ...
   unsigned report_seq;           // ... and the disc it's of
+  // A USB drive is stopped once its disc is identified and left alone for a
+  // while, or it spins for as long as the disc is in. Anything that reads
+  // starts it again first.
+  uint64_t idle_since;  // when it last settled in its state (svc_mono_ms)
+  int spun_down;
 };
 
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -81,8 +86,55 @@ static struct slot *find(const char *id) {
 }
 
 static void set_state(struct slot *s, enum state st, const char *message) {
+  if (st != s->state) {
+    s->idle_since = svc_mono_ms();
+  }
   s->state = st;
   svc_str_copy(s->message, sizeof(s->message), message ? message : "");
+}
+
+#define SPIN_DOWN_MS 30000
+
+// START STOP UNIT: start waits for the disc to spin up, stop doesn't wait.
+static void spin(struct slot *s, int start) {
+  uint8_t cdb[6] = {0x1B, (uint8_t)(start ? 0 : 1), 0, 0, (uint8_t)(start ? 1 : 0), 0};
+  int rc = rip_scsi(&s->t, cdb, sizeof(cdb), RIP_DIR_NONE, NULL, 0, start ? 30000 : 5000, NULL);
+
+  RIP_INFO("%s: %s (%s)", s->info.label, start ? "spinning up" : "spinning down", rc == RIP_OK ? "ok" : "refused");
+}
+
+// Before anything reads a stopped drive. Takes the drive's io lock.
+static void wake(struct slot *s) {
+  int down;
+
+  pthread_mutex_lock(&g_lock);
+  down = s->spun_down;
+  s->spun_down = 0;
+  pthread_mutex_unlock(&g_lock);
+  if (down) {
+    pthread_mutex_lock(&s->io);
+    spin(s, 1);
+    pthread_mutex_unlock(&s->io);
+  }
+}
+
+// A USB drive done with its disc for a while is stopped (not the console's
+// own drive: the system reads and installs from it).
+static void maybe_spin_down(struct slot *s) {
+  int idle;
+
+  pthread_mutex_lock(&g_lock);
+  idle = s->used && !s->busy && !s->spun_down && s->identified && s->info.source != RIP_DRIVE_INTERNAL &&
+         !s->info.is_virtual && (s->state == ST_READY || s->state == ST_UNSUPPORTED || s->state == ST_DONE) &&
+         s->details_state != 1 && svc_mono_ms() - s->idle_since > SPIN_DOWN_MS && !drivetest_holds(s->info.id);
+  if (idle) {
+    s->spun_down = 1;
+  }
+  pthread_mutex_unlock(&g_lock);
+  if (idle && pthread_mutex_trylock(&s->io) == 0) {
+    spin(s, 0);
+    pthread_mutex_unlock(&s->io);
+  }
 }
 
 /* Identification */
@@ -152,9 +204,7 @@ static cJSON *make_offer(const struct slot *s, const char **why_not) {
         choices[i].reason = "still installing";
       } else if (st.partial) {
         choices[i].avail = RIP_AVAIL_BLOCKED;
-        choices[i].reason =
-            "parts of it were never installed here (other languages), and reading them would hang "
-            "the console";
+        choices[i].reason = "parts of it were never installed here, and reading them would hang the console";
       } else if (!st.mounted) {
         cJSON_AddStringToObject(f, "note",
                                 st.running ? "Closes the game that's running." : "Starts the game for a moment.");
@@ -343,6 +393,7 @@ static int read_disc_file(void *ud, const char *path, uint8_t **out, size_t *len
   struct rip_reader r;
   int rc = -1;
 
+  wake(s);
   pthread_mutex_lock(&s->io);
   if (!s->busy && plat_drive_reader(s->info.id, &s->t, &r) == RIP_OK) {
     struct iso_fs iso;
@@ -679,6 +730,9 @@ static void poll_slot(struct slot *s) {
   want = s->wanted_identify;
   s->wanted_identify = 0;
   pthread_mutex_unlock(&g_lock);
+  if (want) {
+    wake(s);
+  }
 
   if (pthread_mutex_trylock(&s->io) != 0) {
     return;  // a job is reading it
@@ -694,7 +748,7 @@ static void poll_slot(struct slot *s) {
   // A disc going into the console's own drive: the system shows it on its
   // home screen, over RipperPS (plat_disc_inserted gives the focus back).
   if (s->polled && s->state == ST_EMPTY && media != RIP_MEDIA_EMPTY && media != RIP_MEDIA_ERROR &&
-      s->info.source == RIP_DRIVE_INTERNAL && !s->info.is_virtual && settings_keep_front()) {
+      s->info.source == RIP_DRIVE_INTERNAL && !s->info.is_virtual) {
     plat_disc_inserted();
   }
   s->polled = 1;
@@ -821,6 +875,7 @@ static void *watch_thread(void *arg) {
     }
     for (i = 0; i < MAX_SLOTS; i++) {
       poll_slot(&g_slots[i]);
+      maybe_spin_down(&g_slots[i]);
     }
     usleep(POLL_MS * 1000);
   }
@@ -850,9 +905,15 @@ cJSON *drives_json(void) {
     cJSON_AddStringToObject(j, "id", s->info.id);
     cJSON_AddStringToObject(j, "label", s->info.label);
     cJSON_AddStringToObject(j, "source", s->info.is_virtual ? "virtual" : rip_drive_source_name(s->info.source));
-    cJSON_AddStringToObject(j, "vendor", s->drive.inquiry.vendor);
-    cJSON_AddStringToObject(j, "product", s->drive.inquiry.product);
-    cJSON_AddStringToObject(j, "revision", s->drive.inquiry.revision);
+    {
+      char v[64];
+      svc_squeeze(s->drive.inquiry.vendor, v, sizeof(v));
+      cJSON_AddStringToObject(j, "vendor", v);
+      svc_squeeze(s->drive.inquiry.product, v, sizeof(v));
+      cJSON_AddStringToObject(j, "product", v);
+      svc_squeeze(s->drive.inquiry.revision, v, sizeof(v));
+      cJSON_AddStringToObject(j, "revision", v);
+    }
     rip_caps_str(s->drive.caps, caps, sizeof(caps));
     cJSON_AddStringToObject(j, "reads", caps);
     cJSON_AddStringToObject(j, "state", STATE_NAMES[s->state]);
@@ -979,7 +1040,7 @@ int drives_claim(const char *id, unsigned disc_seq, int job_id, struct drive_cla
   } else if (s->state != ST_READY && s->state != ST_DONE && job_id != 0) {
     snprintf(err, en, "%s has no disc ready", s->info.label);
   } else if (disc_seq && disc_seq != s->disc_seq) {
-    snprintf(err, en, "the disc in %s changed; check it again", s->info.label);
+    snprintf(err, en, "the disc in %s changed. Check it again", s->info.label);
   } else {
     s->busy = 1;
     s->job_id = job_id;
@@ -1004,6 +1065,7 @@ int drives_claim(const char *id, unsigned disc_seq, int job_id, struct drive_cla
       *c->audio = *s->details.audio;
     }
     pthread_mutex_unlock(&g_lock);
+    wake(s);
     return RIP_OK;
   }
   pthread_mutex_unlock(&g_lock);

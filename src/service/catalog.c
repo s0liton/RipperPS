@@ -11,7 +11,7 @@
 
 static const struct cat_system SYSTEMS[] = {
     {"ps1", "PlayStation", "games", {RIP_DISC_PS1}, "chd", "psx", "{system}"},
-    {"ps2", "PlayStation 2", "games", {RIP_DISC_PS2_DVD, RIP_DISC_PS2_CD}, "chd", "ps2", "{system}"},
+    {"ps2", "PlayStation 2", "games", {RIP_DISC_PS2_DVD, RIP_DISC_PS2_CD}, "iso", "ps2", "{system}"},
     {"ps3", "PlayStation 3", "games", {RIP_DISC_PS3_BD, RIP_DISC_PS3_DVD}, "ps3_iso", "ps3", "{system}"},
     {"ps4", "PlayStation 4", "games", {RIP_DISC_PS4_BD}, "dump", "ps4--1", "{system}"},
     {"ps5", "PlayStation 5", "games", {RIP_DISC_PS5_BD}, "dump", "ps5", "{system}"},
@@ -22,18 +22,18 @@ static const struct cat_system SYSTEMS[] = {
     {"neogeocd", "Neo Geo CD", "games", {RIP_DISC_NEOGEO_CD}, "chd", "neo-geo-cd", "{system}"},
     {"3do", "3DO", "games", {RIP_DISC_3DO}, "chd", "3do", "{system}"},
     {"cdi", "Philips CD-i", "games", {RIP_DISC_CDI}, "chd", "philips-cd-i", "{system}"},
-    {"xbox", "Xbox", "games", {RIP_DISC_XBOX}, "iso", "xbox", "{system}"},
+    {"xbox", "Xbox", "games", {RIP_DISC_XBOX}, "xiso", "xbox", "{system}"},
     {"xbox360", "Xbox 360", "games", {RIP_DISC_XBOX_360}, "iso", "xbox360", "{system}"},
     {"xboxone", "Xbox One / Series", "games", {RIP_DISC_XBOX_ONE}, "iso", "xboxone", "{system}"},
     {"gamecube", "GameCube", "games", {RIP_DISC_GAMECUBE}, "iso", "ngc", "{system}"},
-    {"wii", "Wii", "games", {RIP_DISC_WII}, "iso", "wii", "{system}"},
+    {"wii", "Wii", "games", {RIP_DISC_WII}, "wbfs", "wii", "{system}"},
     {"wiiu", "Wii U", "games", {RIP_DISC_WII_U}, "iso", "wiiu", "{system}"},
     {"dreamcast", "Dreamcast", "games", {RIP_DISC_DREAMCAST}, "bincue", "dc", "{system}"},
     {"dvd_video", "DVD-Video", "movies", {RIP_DISC_DVD_VIDEO}, "mkv", "", "{name}"},
     {"bd_video", "Blu-ray", "movies", {RIP_DISC_BD_VIDEO}, "iso", "", "{name}"},
     {"vcd", "Video CD", "movies", {RIP_DISC_VIDEO_CD}, "bincue", "", "{name}"},
     {"music", "Audio CD", "music", {RIP_DISC_CD_AUDIO}, "flac", "", "{artist}"},
-    {"data", "Data disc", "other", {RIP_DISC_CD_DATA, RIP_DISC_DVD_DATA, RIP_DISC_BD_DATA}, "iso", "", "{name}"},
+    {"data", "Data Disc", "other", {RIP_DISC_CD_DATA, RIP_DISC_DVD_DATA, RIP_DISC_BD_DATA}, "iso", "", "{name}"},
 };
 
 const struct cat_system *catalog_system_for(enum rip_disc_kind kind) {
@@ -90,26 +90,29 @@ static const struct choice CHD_CODECS[] = {{"zlib", "Deflate", NULL}, {"zstd", "
 static const struct choice FLAC_LEVELS[] = {
     {"5", "Normal", NULL}, {"8", "Smallest", NULL}, {"0", "Fastest", NULL}, {NULL, NULL, NULL}};
 static const struct choice AUDIO_LAYOUTS[] = {
-    {"tracks", "One file per track", NULL}, {"image", "One file and a CUE sheet", NULL}, {NULL, NULL, NULL}};
-static const struct choice DUMP_TARGETS[] = {
-    {"emulator", "An emulator", NULL}, {"ps5", "A PS5", NULL}, {"ps4", "A PS4", "ps4"}, {NULL, NULL, NULL}};
+    {"tracks", "One File per Track", NULL}, {"image", "One File and a CUE Sheet", NULL}, {NULL, NULL, NULL}};
+// Dumps are always decrypted and fake-signed: emulators take fake-signed
+// executables too. A PS4 game may be meant for a PS4, which wants its own kind.
+static const struct choice DUMP_TARGETS[] = {{"ps5", "A PS5", NULL}, {"ps4", "A PS4", "ps4"}, {NULL, NULL, NULL}};
+// Each lowers the game to that firmware's SDK, so it also runs on anything
+// newer: the labels say which firmware each one is the pick for.
 static const struct choice DUMP_BACKPORTS[] = {{"off", "Off", NULL},
-                                               {"ps4-5.05", "PS4 firmware 5.05", "ps4"},
-                                               {"ps4-6.00", "PS4 firmware 6.00", "ps4"},
-                                               {"ps4-7.00", "PS4 firmware 7.00", "ps4"},
-                                               {"ps4-9.00", "PS4 firmware 9.00", "ps4"},
-                                               {"ps4-10.00", "PS4 firmware 10.00", "ps4"},
-                                               {"ps4-11.00", "PS4 firmware 11.00", "ps4"},
-                                               {"ps5-1", "PS5 firmware 1.xx", "ps5"},
-                                               {"ps5-2", "PS5 firmware 2.xx", "ps5"},
-                                               {"ps5-3", "PS5 firmware 3.xx", "ps5"},
-                                               {"ps5-4", "PS5 firmware 4.xx", "ps5"},
-                                               {"ps5-5", "PS5 firmware 5.xx", "ps5"},
-                                               {"ps5-6", "PS5 firmware 6.xx", "ps5"},
-                                               {"ps5-7", "PS5 firmware 7.xx", "ps5"},
-                                               {"ps5-8", "PS5 firmware 8.xx", "ps5"},
-                                               {"ps5-9", "PS5 firmware 9.xx", "ps5"},
-                                               {"ps5-10", "PS5 firmware 10.xx", "ps5"},
+                                               {"ps4-5.05", "PS4 5.05 to 5.56", "ps4"},
+                                               {"ps4-6.00", "PS4 6.xx", "ps4"},
+                                               {"ps4-7.00", "PS4 7.xx and 8.xx", "ps4"},
+                                               {"ps4-9.00", "PS4 9.xx", "ps4"},
+                                               {"ps4-10.00", "PS4 10.xx", "ps4"},
+                                               {"ps4-11.00", "PS4 11.xx and newer", "ps4"},
+                                               {"ps5-1", "PS5 1.xx", "ps5"},
+                                               {"ps5-2", "PS5 2.xx", "ps5"},
+                                               {"ps5-3", "PS5 3.xx", "ps5"},
+                                               {"ps5-4", "PS5 4.xx", "ps5"},
+                                               {"ps5-5", "PS5 5.xx", "ps5"},
+                                               {"ps5-6", "PS5 6.xx", "ps5"},
+                                               {"ps5-7", "PS5 7.xx", "ps5"},
+                                               {"ps5-8", "PS5 8.xx", "ps5"},
+                                               {"ps5-9", "PS5 9.xx", "ps5"},
+                                               {"ps5-10", "PS5 10.xx and newer", "ps5"},
                                                {NULL, NULL, NULL}};
 
 static const struct option NO_OPTIONS[] = {{NULL, NULL, NULL, NULL, NULL, NULL}};
@@ -118,18 +121,21 @@ static const struct choice VIDEO_QUALITY[] = {
 static const struct choice VIDEO_SPEED[] = {
     {"veryfast", "Fast", NULL}, {"medium", "Slower", NULL}, {"ultrafast", "Fastest", NULL}, {NULL, NULL, NULL}};
 static const struct option MP4_OPTIONS[] = {{"video_quality", "Quality", "choice", "20", VIDEO_QUALITY, NULL},
-                                            {"video_speed", "Encoding", "choice", "veryfast", VIDEO_SPEED, NULL},
+                                            {"video_speed", "Encoding Speed", "choice", "veryfast", VIDEO_SPEED, NULL},
                                             {NULL, NULL, NULL, NULL, NULL, NULL}};
 static const struct option CHD_OPTIONS[] = {{"chd_codec", "Compression", "choice", "zlib", CHD_CODECS, NULL},
                                             {NULL, NULL, NULL, NULL, NULL, NULL}};
 static const struct option PS3_OPTIONS[] = {
-    {"keep_encrypted", "Also keep the encrypted image", "toggle", "0", NULL, NULL},
+    {"keep_encrypted", "Also Keep the Encrypted Image", "toggle", "0", NULL, NULL},
+    {"split", "Split for FAT32 Drives", "toggle", "0", NULL, NULL},
     {NULL, NULL, NULL, NULL, NULL, NULL}};
-static const struct option BINCUE_OPTIONS[] = {{"subchannel", "Save subchannel", "toggle", "0", NULL, NULL},
+static const struct option WBFS_OPTIONS[] = {{"split", "Split for FAT32 Drives", "toggle", "1", NULL, NULL},
+                                             {NULL, NULL, NULL, NULL, NULL, NULL}};
+static const struct option BINCUE_OPTIONS[] = {{"subchannel", "Keep Subchannel Data", "toggle", "0", NULL, NULL},
                                                {NULL, NULL, NULL, NULL, NULL, NULL}};
 static const struct option FLAC_OPTIONS[] = {{"flac_level", "Compression", "choice", "5", FLAC_LEVELS, NULL},
-                                             {"layout", "Files", "choice", "tracks", AUDIO_LAYOUTS, NULL},
-                                             {"lookup", "Look up the album", "toggle", "1", NULL, NULL},
+                                             {"layout", "Tracks As", "choice", "tracks", AUDIO_LAYOUTS, NULL},
+                                             {"lookup", "Look Up the Album", "toggle", "1", NULL, NULL},
                                              {NULL, NULL, NULL, NULL, NULL, NULL}};
 static const struct choice MP3_QUALITY[] = {{"2", "High (VBR)", NULL},
                                             {"0", "Best (VBR)", NULL},
@@ -147,38 +153,40 @@ static const struct choice OPUS_RATES[] = {{"160", "160 kbit/s", NULL},
                                            {"96", "96 kbit/s", NULL},
                                            {NULL, NULL, NULL}};
 static const struct option MP3_OPTIONS[] = {{"mp3_quality", "Quality", "choice", "2", MP3_QUALITY, NULL},
-                                            {"layout", "Files", "choice", "tracks", AUDIO_LAYOUTS, NULL},
-                                            {"lookup", "Look up the album", "toggle", "1", NULL, NULL},
+                                            {"layout", "Tracks As", "choice", "tracks", AUDIO_LAYOUTS, NULL},
+                                            {"lookup", "Look Up the Album", "toggle", "1", NULL, NULL},
                                             {NULL, NULL, NULL, NULL, NULL, NULL}};
-static const struct option AAC_OPTIONS[] = {{"aac_bitrate", "Bit rate", "choice", "256", AAC_RATES, NULL},
-                                            {"layout", "Files", "choice", "tracks", AUDIO_LAYOUTS, NULL},
-                                            {"lookup", "Look up the album", "toggle", "1", NULL, NULL},
+static const struct option AAC_OPTIONS[] = {{"aac_bitrate", "Bit Rate", "choice", "256", AAC_RATES, NULL},
+                                            {"layout", "Tracks As", "choice", "tracks", AUDIO_LAYOUTS, NULL},
+                                            {"lookup", "Look Up the Album", "toggle", "1", NULL, NULL},
                                             {NULL, NULL, NULL, NULL, NULL, NULL}};
-static const struct option OPUS_OPTIONS[] = {{"opus_bitrate", "Bit rate", "choice", "160", OPUS_RATES, NULL},
-                                             {"layout", "Files", "choice", "tracks", AUDIO_LAYOUTS, NULL},
-                                             {"lookup", "Look up the album", "toggle", "1", NULL, NULL},
+static const struct option OPUS_OPTIONS[] = {{"opus_bitrate", "Bit Rate", "choice", "160", OPUS_RATES, NULL},
+                                             {"layout", "Tracks As", "choice", "tracks", AUDIO_LAYOUTS, NULL},
+                                             {"lookup", "Look Up the Album", "toggle", "1", NULL, NULL},
                                              {NULL, NULL, NULL, NULL, NULL, NULL}};
-static const struct option LOSSLESS_OPTIONS[] = {{"layout", "Files", "choice", "tracks", AUDIO_LAYOUTS, NULL},
-                                                 {"lookup", "Look up the album", "toggle", "1", NULL, NULL},
+static const struct option LOSSLESS_OPTIONS[] = {{"layout", "Tracks As", "choice", "tracks", AUDIO_LAYOUTS, NULL},
+                                                 {"lookup", "Look Up the Album", "toggle", "1", NULL, NULL},
                                                  {NULL, NULL, NULL, NULL, NULL, NULL}};
 
-static const struct choice DUMP_CONTAINERS[] = {{"folder", "A folder", NULL},
-                                                {"ffpkg", "UFS2 image (.ffpkg)", NULL},
-                                                {"exfat", "exFAT image (.exfat)", NULL},
+static const struct choice DUMP_CONTAINERS[] = {{"folder", "A Folder", NULL},
+                                                {"ffpkg", "UFS2 Image (.ffpkg)", NULL},
+                                                {"exfat", "exFAT Image (.exfat)", NULL},
+                                                {"pkg", "Fake PKG (.pkg)", "ps4"},
                                                 {NULL, NULL, NULL}};
 
-static const struct option DUMP_OPTIONS[] = {{"run_on", "For", "choice", "emulator", DUMP_TARGETS, NULL},
-                                             {"backport", "Backport to", "choice", "off", DUMP_BACKPORTS, NULL},
-                                             {"container", "Package as", "choice", "folder", DUMP_CONTAINERS, NULL},
+static const struct option DUMP_OPTIONS[] = {{"complete", "Complete Dump", "toggle", "0", NULL, NULL},
+                                             {"run_on", "Runs On", "choice", "ps5", DUMP_TARGETS, NULL},
+                                             {"backport", "Backport To", "choice", "off", DUMP_BACKPORTS, NULL},
+                                             {"container", "Package As", "choice", "folder", DUMP_CONTAINERS, NULL},
                                              {NULL, NULL, NULL, NULL, NULL, NULL}};
 
 static const struct format FORMATS[] = {
-    {"iso", RIP_RECIPE_ISO, "ISO image", NULL, NO_OPTIONS},
+    {"iso", RIP_RECIPE_ISO, "ISO Image", NULL, NO_OPTIONS},
     {"chd", RIP_RECIPE_CHD, "CHD", NULL, CHD_OPTIONS},
     {"ps3_iso", RIP_RECIPE_PS3_ISO, "Decrypted ISO", "Needs the disc's key in the key file.", PS3_OPTIONS},
-    {"folder", RIP_RECIPE_FOLDER, "Game folder", NULL, NO_OPTIONS},
+    {"folder", RIP_RECIPE_FOLDER, "Game Folder", NULL, NO_OPTIONS},
     {"bincue", RIP_RECIPE_BINCUE, "BIN/CUE", NULL, BINCUE_OPTIONS},
-    {"dump", RIP_RECIPE_SYSTEM_DUMP, "Game dump", "Install the game first.", DUMP_OPTIONS},
+    {"dump", RIP_RECIPE_SYSTEM_DUMP, "Game Dump", "Install the game first.", DUMP_OPTIONS},
     {"flac", RIP_RECIPE_AUDIO, "FLAC", NULL, FLAC_OPTIONS},
     {"mp3", RIP_RECIPE_MP3, "MP3", NULL, MP3_OPTIONS},
     {"aac", RIP_RECIPE_AAC, "AAC", "In .m4a", AAC_OPTIONS},
@@ -187,6 +195,10 @@ static const struct format FORMATS[] = {
     {"wav", RIP_RECIPE_WAV, "WAV", NULL, LOSSLESS_OPTIONS},
     {"mkv", RIP_RECIPE_MKV, "MKV", NULL, NO_OPTIONS},
     {"mp4", RIP_RECIPE_MP4, "MP4", "H.264 and AAC. Re-encoded, so it's slower.", MP4_OPTIONS},
+    {"xiso", RIP_RECIPE_XISO, "XISO", NULL, NO_OPTIONS},
+    {"ciso", RIP_RECIPE_CISO, "CISO", NULL, NO_OPTIONS},
+    {"wbfs", RIP_RECIPE_WBFS, "WBFS", NULL, WBFS_OPTIONS},
+    {"rvz", RIP_RECIPE_RVZ, "RVZ", NULL, NO_OPTIONS},
 };
 
 static const struct format *find_format(const char *id) {
@@ -259,6 +271,12 @@ static cJSON *options_json(const struct format *f, const cJSON *given) {
   return out;
 }
 
+cJSON *catalog_format_defaults(const char *format) {
+  const struct format *f = find_format(format);
+
+  return f ? options_json(f, NULL) : cJSON_CreateObject();
+}
+
 cJSON *catalog_default_profile(const struct cat_system *s) {
   cJSON *p = cJSON_CreateObject();
   const struct format *f = find_format(s->default_format);
@@ -287,6 +305,8 @@ void catalog_job_options(const char *format, const cJSON *options, struct rip_jo
       opts->chd_codec = !strcmp(v, "zstd") ? CHD_ZSTD : CHD_ZLIB;
     } else if (!strcmp(o->id, "keep_encrypted")) {
       opts->ps3_keep_encrypted = v[0] == '1';
+    } else if (!strcmp(o->id, "split")) {
+      opts->split_fat32 = v[0] == '1';
     } else if (!strcmp(o->id, "subchannel")) {
       opts->cd_subchannel = v[0] == '1';
     } else if (!strcmp(o->id, "flac_level") || !strcmp(o->id, "mp3_quality") || !strcmp(o->id, "aac_bitrate") ||
@@ -332,36 +352,41 @@ struct dest_type {
 #endif
 
 static const struct dest_type DEST_TYPES[] = {
-    {"local", "This console or a USB drive", "", 1, {{"path", "Folder", "folder", "/data/ripper/rips", ""}}},
+    {"local", "Local Location", "A folder on the console.", 1, {{"path", "Folder", "folder", "/data/ripper/rips", ""}}},
+    {"usb",
+     "USB Drive",
+     "A folder on a USB drive. Plug it in before you pick the folder.",
+     1,
+     {{"path", "Folder", "folder", "/mnt/usb0/rips", ""}}},
     {"romm",
      "RomM",
      "RomM 5.4 or newer.",
      1,
      {{"url", "Server", "text", "https://romm.example.com", ""},
-      {"token", "API token", "secret", "Pair, or paste a client API token", ""},
-      {"tls_verify", "Check the server's certificate", "toggle", NULL, "1"},
-      {"scan", "Scan the platform after an upload", "toggle", NULL, "1"}}},
+      {"token", "API Token", "secret", "Pair, or paste a client API token", ""},
+      {"tls_verify", "Check the Server's Certificate", "toggle", NULL, "1"},
+      {"scan", "Scan the Platform After an Upload", "toggle", NULL, "1"}}},
     {"smb",
-     "SMB share",
+     "SMB Share",
      "A Windows, Samba or NAS share.",
      HAVE_SMB2,
      {{"host", "Server", "text", "192.168.1.10 or nas.local", ""},
       {"share", "Share", "text", "media", ""},
-      {"path", "Folder in the share", "text", "Movies", ""},
+      {"path", "Folder in the Share", "text", "Movies", ""},
       {"user", "User", "text", "", ""},
       {"password", "Password", "secret", "", ""},
       {"domain", "Domain", "text", "WORKGROUP (usually blank)", ""}}},
     {"nfs",
-     "NFS export",
-     "An NFS export; it must allow the console's address.",
+     "NFS Export",
+     "An NFS export. It must allow the console's address.",
      HAVE_NFS,
      {{"host", "Server", "text", "192.168.1.10", ""},
       {"export", "Export", "text", "/volume1/media", ""},
-      {"path", "Folder in the export", "text", "Music", ""},
-      {"uid", "Write as user id", "number", "1000", "0"},
-      {"gid", "Write as group id", "number", "1000", "0"}}},
+      {"path", "Folder in the Export", "text", "Music", ""},
+      {"uid", "Write as User ID", "number", "1000", "0"},
+      {"gid", "Write as Group ID", "number", "1000", "0"}}},
     {"ftp",
-     "FTP server",
+     "FTP Server",
      "Plain FTP, or FTP over TLS.",
      1,
      {{"host", "Server", "text", "192.168.1.10", ""},
@@ -401,7 +426,9 @@ int catalog_is_secret(const char *dest_type, const char *field) {
 
 /* JSON */
 
-static cJSON *format_json(const struct format *f) {
+// A format as a system's discs see it: only the choices meant for them, and
+// no option left with nothing to choose.
+static cJSON *format_json(const struct format *f, const char *system) {
   cJSON *j = cJSON_CreateObject();
   cJSON *opts = cJSON_AddArrayToObject(j, "options");
   const struct option *o;
@@ -410,7 +437,18 @@ static cJSON *format_json(const struct format *f) {
   cJSON_AddStringToObject(j, "label", f->label);
   cJSON_AddStringToObject(j, "help", f->help ? f->help : "");
   for (o = f->options; o->id; o++) {
-    cJSON *oj = cJSON_CreateObject();
+    cJSON *oj;
+    if (strcmp(o->type, "toggle") != 0) {
+      const struct choice *c;
+      int usable = 0;
+      for (c = o->choices; c && c->id; c++) {
+        usable += !c->only || !strcmp(c->only, system);
+      }
+      if (usable < 2) {
+        continue;
+      }
+    }
+    oj = cJSON_CreateObject();
     cJSON_AddStringToObject(oj, "id", o->id);
     cJSON_AddStringToObject(oj, "label", o->label);
     cJSON_AddStringToObject(oj, "type", o->type);
@@ -421,7 +459,11 @@ static cJSON *format_json(const struct format *f) {
       cJSON *cs = cJSON_AddArrayToObject(oj, "choices");
       cJSON_AddStringToObject(oj, "default", o->def);
       for (c = o->choices; c && c->id; c++) {
-        cJSON *cj = cJSON_CreateObject();
+        cJSON *cj;
+        if (c->only && strcmp(c->only, system) != 0) {
+          continue;
+        }
+        cj = cJSON_CreateObject();
         cJSON_AddStringToObject(cj, "id", c->id);
         cJSON_AddStringToObject(cj, "label", c->label);
         if (c->only) {
@@ -466,7 +508,7 @@ static cJSON *system_formats(const struct cat_system *s) {
       }
     }
     if (found) {
-      cJSON *f = format_json(&FORMATS[i]);
+      cJSON *f = format_json(&FORMATS[i], s->id);
       cJSON_AddBoolToObject(f, "planned", planned);
       if (!strcmp(FORMATS[i].id, s->default_format)) {
         cJSON_InsertItemInArray(arr, 0, f);
@@ -536,14 +578,12 @@ const char *catalog_game_container(const cJSON *options) {
 }
 
 void catalog_game_finish(const char *system, const cJSON *options, struct game_finish *out) {
-  const struct choice *run_on = find_choice(DUMP_TARGETS, jstr(options, "run_on", "emulator"));
   const struct choice *back = find_choice(DUMP_BACKPORTS, jstr(options, "backport", "off"));
 
   memset(out, 0, sizeof(*out));
-  if (run_on && (!run_on->only || !strcmp(run_on->only, system)) && strcmp(run_on->id, "emulator") != 0) {
-    out->fself = 1;
-    out->target = !strcmp(run_on->id, "ps4") ? SCE_TARGET_PS4 : SCE_TARGET_PS5;
-  }
+  out->fself = 1;
+  out->target =
+      !strcmp(system, "ps4") && !strcmp(jstr(options, "run_on", "ps5"), "ps4") ? SCE_TARGET_PS4 : SCE_TARGET_PS5;
   if (back && back->only && !strcmp(back->only, system)) {
     sce_backport_target(back->id, &out->backport_ps4, &out->backport_ps5);
   }

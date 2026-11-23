@@ -1,6 +1,7 @@
 #include "ripper/exfat.h"
 
 #include <dirent.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -346,6 +347,7 @@ static int write_file(struct out *o, const struct node *n) {
   buf = malloc(BUF);
   in = open(n->path, O_RDONLY);
   if (!buf || in < 0) {
+    RIP_ERROR("exfat: can't open %s: %s", n->path, strerror(errno));
     free(buf);
     if (in >= 0) {
       close(in);
@@ -353,11 +355,19 @@ static int write_file(struct out *o, const struct node *n) {
     return RIP_ERR;
   }
   if (lseek(o->fd, (off_t)at, SEEK_SET) < 0) {
+    RIP_ERROR("exfat: can't seek to %llu: %s", (unsigned long long)at, strerror(errno));
     rc = RIP_ERR;
   }
   while (rc == RIP_OK && left) {
     long got = rip_read_full(in, buf, left < BUF ? (size_t)left : BUF);
-    if (got <= 0 || rip_write_all(o->fd, buf, (size_t)got) != 0) {
+    if (got <= 0) {
+      RIP_ERROR("exfat: %s ended %llu bytes early (%s)", n->path, (unsigned long long)left,
+                got < 0 ? strerror(errno) : "shorter than it said");
+      rc = RIP_ERR;
+      break;
+    }
+    if (rip_write_all(o->fd, buf, (size_t)got) != 0) {
+      RIP_ERROR("exfat: can't write %s into the image: %s", n->path, strerror(errno));
       rc = RIP_ERR;
       break;
     }
@@ -575,6 +585,7 @@ int exfat_build(const char *src_dir, const char *image_path, const char *label, 
   }
   rc = write_tree(&o, &p, 0, 1, root_entries);
   if (rc == RIP_OK && fsync(o.fd) != 0) {
+    RIP_ERROR("exfat: can't finish %s: %s", image_path, strerror(errno));
     rc = RIP_ERR;
   }
   if (rc == RIP_OK) {

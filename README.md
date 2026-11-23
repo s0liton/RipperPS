@@ -1,5 +1,7 @@
 # ripper
 
+![RipperPS on the TV](assets/ripperps.jpg)
+
 A PS5 app that lets you rip your movie/music/game discs into the well known formats. My PS5 already had a perfectly good Blu-ray drive just sitting there, so I figured why not make it rip everything I own. It reads through the console's own drive and any USB drive you plug in, and sends the rips to the console, a USB disk, your NAS or your RomM server.
 
 - **Rip from any drive**
@@ -24,7 +26,7 @@ That's where you come in. I have created a drive/disc test inside the app that y
 
 1. Open **Drive test** (it's a tab in the web UI, and in Settings in RipperPS) and hit **Start** next to your drive.
 2. Pop your discs in one at a time. It'll tell you when to swap, and you tell it what each disc is.
-3. Hit **Finish**, download the zip and attach it to the [drive report form](https://github.com/s0liton/ripper/issues/new?template=drive-report.yml).
+3. Hit **Finish**, download the zip and attach it to the [drive report form](https://github.com/s0liton/RipperPS/issues/new?template=drive-report.yml).
 
 Most wanted:
 
@@ -47,17 +49,21 @@ Note: Your privacy is fully preserved. No unique IDs about your console, drives,
 | Disc | Drive | Output | Tested on hardware |
 |---|---|---|---|
 | PS2 DVD | built-in or USB DVD | ISO, CHD | yes |
-| PS3 Blu-ray / DVD | built-in | ISO, decrypted with a key file | partly |
+| PS3 Blu-ray / DVD | built-in | ISO (whole or split for FAT32) or game folder, decrypted with a key file | partly |
 | PS4 / PS5 | built-in | game dump (folder, `.ffpkg` or `.exfat`) | yes, once the game is installed |
 | DVD-Video | built-in or USB DVD | MKV, MP4, ISO | yes |
-| Blu-ray Video | built-in or USB Blu-ray | ISO (still encrypted) | not yet |
+| Blu-ray Video | built-in or USB Blu-ray | ISO, decrypted with a KEYDB.cfg | not yet |
 | DVD / Blu-ray data, PC discs | built-in or USB | ISO, CHD | not yet |
-| Audio CD | USB | FLAC, MP3, AAC, ALAC, Opus, WAV | yes, FLAC and MP3 |
-| PS1, PS2 CD | USB | BIN/CUE, CHD | yes |
+| Audio CD | USB | FLAC, MP3, AAC, ALAC, Opus, WAV, BIN/CUE | yes, FLAC and MP3 |
+| PS1 | USB | CHD, BIN/CUE | yes |
+| PS2 CD | USB | ISO, CHD, BIN/CUE | yes, CHD and BIN/CUE |
 | Saturn, Sega CD, PC Engine CD, PC-FX, Neo Geo CD, 3DO, CD-i, Video CD | USB | CHD, BIN/CUE | not yet |
 | Dreamcast | USB drive that reads GD-ROMs | GDI | not yet |
-| Xbox, Xbox 360 | USB with Kreon or OmniDrive | ISO | not yet |
-| GameCube, Wii, Wii U | USB with OmniDrive | ISO, WUD | not yet |
+| Xbox | USB with Kreon or OmniDrive | XISO, ISO | not yet |
+| Xbox 360 | USB with Kreon or OmniDrive | ISO | not yet |
+| GameCube | USB with OmniDrive | ISO, CISO, RVZ | not yet |
+| Wii | USB with OmniDrive | WBFS (whole or split for FAT32), ISO, RVZ | not yet |
+| Wii U | USB with OmniDrive | WUD | not yet |
 | Xbox One / Series | USB Blu-ray | ISO (still encrypted) | not yet |
 
 "Not yet" means I haven't been able to try it on a real disc. That's where your [drive reports](#help-us-test-send-a-drive-report) come in.
@@ -72,7 +78,7 @@ I plan for the app to be out of experimental state by end of this year.
 
 - A jailbroken PS5 with an ELF loader (etaHEN or similar)
 - A USB drive for CDs (music, PS1 and other CD games), since the PS5's drive can't read them
-- For PS3 discs, a key file (not included, don't ask)
+- For PS3 discs, a key file, and for Blu-ray movies a KEYDB.cfg (neither included, don't ask)
 
 ## Install
 
@@ -80,7 +86,7 @@ ripper will be on ProsperoStore once it's out of pre-release. Until then, it's a
 
 ### Manual Install
 
-Download `PPSA76700.zip` from the [releases page](https://github.com/s0liton/ripper/releases), unzip it and copy the `PPSA76700` folder to `/data/homebrew/` on the console. Add it with your launcher (ShadowMountPlus or similar) and launch RipperPS. It'll start the background service for you.
+Download `PPSA76700.zip` from the [releases page](https://github.com/s0liton/RipperPS/releases), unzip it and copy the `PPSA76700` folder to `/data/homebrew/` on the console. Add it with your launcher (ShadowMountPlus or similar) and launch RipperPS. It'll start the background service for you.
 
 If you'd rather run just the payload, without the app:
 1. Download the latest `ripper.elf` from the releases page.
@@ -102,10 +108,11 @@ Copy the new release's folder over the old one. RipperPS swaps in its new payloa
 
 Everything lives in Settings, in RipperPS or the web UI.
 
-- **Destinations:** where your rips go. "This console" is there out of the box. Add a USB disk, SMB, NFS, FTP or RomM (sign in with the code it shows you).
-- **Disc types:** what each kind of disc rips to by default. PS1 to CHD on RomM, music CDs to FLAC on your NAS, whatever you like.
-- **PS3 key file:** goes in `/data/ripper/keys/ps3.keys`.
-- **TMDB key:** optional, but it gets you proper movie names and posters.
+- **Destinations:** where your rips go. "Local Location" is there out of the box. Add a USB drive, SMB, NFS, FTP or RomM (sign in with the code it shows you). Folders are picked from a list, no typing paths.
+- **Default Rip Settings:** what each kind of disc rips to unless you change it. PS1 to CHD on RomM, music CDs to FLAC on your NAS, whatever you like.
+- **PS3 key file:** `/data/ripper/keys/ps3.keys` by default. To use a file somewhere else, pick it in Settings, under Keys.
+- **Blu-ray keys:** a `KEYDB.cfg` (the file libaacs reads), `/data/ripper/keys/KEYDB.cfg` by default. Without the disc's key, the ISO stays encrypted.
+- **Movie names and posters:** Wikipedia, best effort, no key needed. For the best matches, add a free TMDB key (themoviedb.org).
 
 ## Ripping
 
@@ -121,7 +128,7 @@ ripper exposes a Web UI at `http://<ps5-ip>:8790` where you can do everything th
 
 - **The web UI won't open:** if the console was in rest mode when you sent the payload, it never got there. Wake it up and send `ripper.elf` again.
 - **"Can't be ripped here":** check [What it rips](#what-it-rips). A lot of discs need a USB drive.
-- **Anything else:** on the Log tab, hit **Download reports** and attach the zip to an [issue](https://github.com/s0liton/ripper/issues/new). I'll take a look.
+- **Anything else:** on the Log tab, hit **Download reports** and attach the zip to an [issue](https://github.com/s0liton/RipperPS/issues/new). I'll take a look.
 
 ## Building
 
@@ -149,4 +156,4 @@ If buying isn't **owning**, then piracy **isn't** stealing. 🖕
 
 ## License
 
-GPL-3.0. [libdvdcss](https://www.videolan.org/developers/libdvdcss.html) is GPL-2.0-or-later. [cJSON](https://github.com/DaveGamble/cJSON) and [QR Code generator](https://www.nayuki.io/page/qr-code-generator-library) are MIT. idlesauce's [ps5-self-pager](https://github.com/idlesauce/ps5-self-pager) is Unlicense. The game name database comes from [Redump](http://redump.org) (CC-BY-SA-4.0). Drive access follows [ps-disc-detect](https://github.com/Al-Azif/ps-disc-detect), and the custom firmware reads follow [redumper](https://github.com/superg/redumper). RipperPS is built on mihawk-99's [PS5 Vulkan Template](https://github.com/mihawk-99/PS5_VulkanTemplate) and BlackBearReloaded's UI kit; its licenses are in [its README](platform/ps5/app/ripper/README.md).
+GPL-3.0. [libdvdcss](https://www.videolan.org/developers/libdvdcss.html) is GPL-2.0-or-later. [cJSON](https://github.com/DaveGamble/cJSON) and [QR Code generator](https://www.nayuki.io/page/qr-code-generator-library) are MIT. idlesauce's [ps5-self-pager](https://github.com/idlesauce/ps5-self-pager) is Unlicense. PS5 game dumps carry drakmor's [pgo_stub](https://github.com/drakmor/pgo_stub) and [ampr_emu](https://github.com/drakmor/ampr_emu) (GPL-3.0). The game name database comes from [Redump](http://redump.org) (CC-BY-SA-4.0). Drive access follows [ps-disc-detect](https://github.com/Al-Azif/ps-disc-detect), and the custom firmware reads follow [redumper](https://github.com/superg/redumper). RipperPS is built on mihawk-99's [PS5 Vulkan Template](https://github.com/mihawk-99/PS5_VulkanTemplate) and BlackBearReloaded's UI kit; its licenses are in [its README](platform/ps5/app/ripper/README.md).

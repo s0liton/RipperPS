@@ -4,11 +4,14 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
+
+#include "ripper/common.h"
 
 long rip_read_full(int fd, void *buf, size_t len) {
   size_t got = 0;
@@ -176,4 +179,66 @@ uint64_t rip_now_ms(void) {
 
   clock_gettime(CLOCK_MONOTONIC, &ts);
   return (uint64_t)ts.tv_sec * 1000u + (uint64_t)ts.tv_nsec / 1000000u;
+}
+
+int rip_split_file(const char *path, uint64_t part, const char *prefix) {
+  char first[2200];
+  struct stat st;
+  uint64_t off;
+  unsigned n;
+  uint8_t *buf;
+  int in;
+  int rc = RIP_OK;
+
+  if (stat(path, &st) != 0 || !part || (uint64_t)st.st_size <= part) {
+    return RIP_ERR;
+  }
+  buf = malloc(1u << 20);
+  in = open(path, O_RDONLY);
+  if (!buf || in < 0) {
+    free(buf);
+    if (in >= 0) {
+      close(in);
+    }
+    return RIP_ERR;
+  }
+  // The parts after the first, copied out.
+  for (off = part, n = 1; off < (uint64_t)st.st_size && rc == RIP_OK; off += part, n++) {
+    char name[2200];
+    uint64_t left = (uint64_t)st.st_size - off < part ? (uint64_t)st.st_size - off : part;
+    int out;
+    snprintf(name, sizeof(name), "%s.%u", prefix, n);
+    out = open(name, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (out < 0 || lseek(in, (off_t)off, SEEK_SET) < 0) {
+      rc = RIP_ERR;
+    }
+    while (rc == RIP_OK && left) {
+      size_t chunk = left < (1u << 20) ? (size_t)left : (1u << 20);
+      if (rip_read_full(in, buf, chunk) != (long)chunk || rip_write_all(out, buf, chunk) != 0) {
+        rc = RIP_ERR;
+      }
+      left -= chunk;
+    }
+    if (out >= 0 && close(out) != 0) {
+      rc = RIP_ERR;
+    }
+  }
+  close(in);
+  free(buf);
+  snprintf(first, sizeof(first), "%s.0", prefix);
+  if (rc == RIP_OK && rename(path, first) == 0) {
+    if (truncate(first, (off_t)part) == 0) {
+      return RIP_OK;
+    }
+    rename(first, path);  // still whole: truncate changed nothing
+  }
+  {
+    unsigned k;
+    for (k = 1; k < n; k++) {
+      char name[2200];
+      snprintf(name, sizeof(name), "%s.%u", prefix, k);
+      unlink(name);
+    }
+    return RIP_ERR;
+  }
 }

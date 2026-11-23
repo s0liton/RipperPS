@@ -15,8 +15,8 @@
 #include "ripper/keydb.h"
 #include "ripper/ps3.h"
 #include "ripper/reader.h"
-#include "ripper/rip.h"
 #include "ripper/remux.h"
+#include "ripper/rip.h"
 #include "ripper/util.h"
 #include "test.h"
 
@@ -263,6 +263,51 @@ static void test_ps3(void) {
     if (pass == 1) {
       CHECK(file_equals(res.encrypted_path, enc, len));
       CHECK(strstr(res.image_path, "(decrypted)") != NULL);
+    }
+    rip_keydb_free(&db);
+    rip_reader_close(&g.reader);
+    rm_dir(dir);
+  }
+
+  // As a game folder: the decrypted image's files, the image gone after. Without
+  // a key there's no folder to make.
+  for (pass = 0; pass < 2; pass++) {
+    struct rip_choice choices[8];
+    size_t n;
+    size_t i;
+    char path[1200];
+    uint8_t *got;
+    size_t got_len;
+
+    CHECK(rig_up(&g, enc, len, 0xFF71, 1) == RIP_OK);
+    n = rip_plan(&g.drive, &g.disc, choices, RIP_ARRAY_LEN(choices));
+    recipe = NULL;
+    for (i = 0; i < n; i++) {
+      if (choices[i].recipe->id == RIP_RECIPE_FOLDER) {
+        recipe = choices[i].recipe;
+      }
+    }
+    CHECK(recipe && recipe->status == RIP_RECIPE_READY);
+    test_tmpdir(dir, sizeof(dir));
+    snprintf(keys_path, sizeof(keys_path), "%s/ps3.keys", dir);
+    write_keys(keys_path, enc_sha1, len, key);
+    CHECK(rip_keydb_load(&db, keys_path) == RIP_OK);
+    memset(&opts, 0, sizeof(opts));
+    opts.out_dir = dir;
+    opts.ps3_keys = pass == 0 ? &db : NULL;
+    if (pass == 0) {
+      CHECK(recipe && rip_run(recipe, &g.drive, &g.reader, &g.disc, &opts, &res) == RIP_OK);
+      CHECK(strstr(res.image_path, "Test Game (USA)") != NULL);
+      snprintf(path, sizeof(path), "%s/PS3_GAME/EBOOT.BIN", res.image_path);
+      got = test_read_file(path, &got_len);
+      CHECK(got && got_len == 16 * 2048 && !memcmp(got, plain + 32 * 2048, got_len));
+      free(got);
+      snprintf(path, sizeof(path), "%s/PS3_DISC.SFB", res.image_path);
+      CHECK(rip_file_exists(path));
+      snprintf(path, sizeof(path), "%s/Test Game (USA).iso", dir);
+      CHECK(!rip_file_exists(path));
+    } else {
+      CHECK(recipe && rip_run(recipe, &g.drive, &g.reader, &g.disc, &opts, &res) != RIP_OK);
     }
     rip_keydb_free(&db);
     rip_reader_close(&g.reader);

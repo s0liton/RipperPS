@@ -35,7 +35,11 @@ enum rip_recipe_id {
   RIP_RECIPE_AAC,
   RIP_RECIPE_ALAC,
   RIP_RECIPE_OPUS,
-  RIP_RECIPE_WAV
+  RIP_RECIPE_WAV,
+  RIP_RECIPE_XISO,  // an Xbox disc's game partition alone (xiso.h)
+  RIP_RECIPE_CISO,  // a GameCube disc without its unused blocks (ciso.h)
+  RIP_RECIPE_WBFS,  // a Wii disc for USB Loader GX and WiiFlow (wbfs.h)
+  RIP_RECIPE_RVZ    // Dolphin's compressed GameCube and Wii image (rvz.h)
 };
 
 // Whether the recipe rips an audio CD to files, and in which codec (audio_out.h's).
@@ -88,10 +92,12 @@ struct rip_job_opts {
   enum chd_codec chd_codec;          // CHD recipes
   const char *css_cache_dir;         // DVD-Video: where libdvdcss keeps title keys, may be NULL
   const struct rip_keydb *ps3_keys;  // may be NULL
+  const char *aacs_keydb;            // Blu-ray movies: the KEYDB.cfg, may be NULL
   int ps3_keep_encrypted;            // also keep the encrypted image
-  int cd_subchannel;                 // BIN/CUE: also a .sub of the whole disc (CloneCD layout)
-  int audio_quality;                 // audio CDs: FLAC 0-8, MP3 VBR 0-9 or kbit/s, AAC/Opus kbit/s (audio_out.h)
-  const uint8_t *cover;              // audio CDs: the front cover, embedded and saved as cover.jpg; may be NULL
+  int split_fat32;       // an image over 4 GiB in FAT32-sized parts: webMAN's for PS3, USB Loader GX's for WBFS
+  int cd_subchannel;     // BIN/CUE: also a .sub of the whole disc (CloneCD layout)
+  int audio_quality;     // audio CDs: FLAC 0-8, MP3 VBR 0-9 or kbit/s, AAC/Opus kbit/s (audio_out.h)
+  const uint8_t *cover;  // audio CDs: the front cover, embedded and saved as cover.jpg; may be NULL
   size_t cover_len;
   int audio_image;                     // audio CDs: one file and a CUE sheet, not a file per track
   const struct rip_audio_meta *audio;  // may be NULL
@@ -111,6 +117,9 @@ struct rip_job_result {
   struct rip_hashes hashes;  // of the image exactly as read from the disc
   int ps3_key_found;
   int decrypted;
+  // Blu-ray movies: 1 decrypted through AACS, 2 left encrypted (aacs_why says why).
+  int aacs;
+  char aacs_why[160];
   uint64_t unreadable;  // sectors that couldn't be read, written as zeros (CDs)
 };
 

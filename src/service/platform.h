@@ -74,7 +74,9 @@ struct plat_dump_status {
   int installed;           // the title is installed (a disc game must be, to run)
   int complete;            // ... all of it: a disc game plays before its install finishes
   int installing;          // the system is copying it now, playable or not yet
-  int partial;             // parts this console never fetches (other languages): a dump would hang
+  int partial;             // parts this console never fetches, and not known to be other regions' languages
+  uint64_t missing;        // bytes of the package not on the console (app.pbm), 0 when all of it is
+  int other_languages;     // what's missing is (said to be) other regions' languages: the dump leaves them out
   uint64_t copied;         // ... this much so far
   uint64_t to_copy;        // ... of this much
   int mounted;             // the system has its files mounted now
@@ -85,10 +87,14 @@ struct plat_dump_status {
 void plat_game_status(const char *title_id, struct plat_dump_status *st);
 // Dumps title_id into out_dir (created). Starts the game first when it isn't
 // mounted, which closes the one running. progress gets bytes over the whole
-// game; a nonzero return or *cancel stops it.
+// game; a nonzero return or *cancel stops it. On success err may hold a note
+// for the job (the languages left out).
 typedef int (*plat_progress_fn)(void *ud, const char *phase, uint64_t done, uint64_t total);
-int plat_game_dump(const char *title_id, const char *out_dir, plat_progress_fn progress, void *ud, volatile int *cancel,
-                   char *err, size_t en);
+// complete: every file or nothing (preservation), never stand-ins for parts
+// the console doesn't have. copies: how many times the game's size has to fit
+// where out_dir is (2 when it becomes an image after), checked before it starts.
+int plat_game_dump(const char *title_id, const char *out_dir, int complete, unsigned copies, plat_progress_fn progress,
+                   void *ud, volatile int *cancel, char *err, size_t en);
 
 // Installed games (PS4 and PS5), for dumping without their disc in.
 struct plat_game {

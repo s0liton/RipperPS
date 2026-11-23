@@ -53,8 +53,8 @@ docs/                  this guide and the tester guide
 | `drives.c` | One slot per drive, polled every 1.5 s. States: empty, loading, identifying, ready, unsupported, ripping, done, installing. Writes a disc report for every disc |
 | `jobs.c` | One job per drive at a time: read into staging, release the drive, deliver. Kept in `jobs.json` |
 | `settings.c`, `catalog.c` | `config.json`, and the systems, formats and destination types the UIs build their forms from |
-| `deliver*.c`, `remote.c` | Destinations: local, SMB, NFS, FTP, RomM (device sign-in, chunked upload, library scan) |
-| `details.c`, `gamedb.c`, `musicbrainz.c` | Names and covers: Redump names by serial, MusicBrainz, TMDB, the disc's own icons |
+| `deliver*.c`, `remote.c` | Destinations: a folder on the console, a USB drive, SMB, NFS, FTP, RomM (device sign-in, chunked upload, library scan) |
+| `details.c`, `gamedb.c`, `musicbrainz.c` | Names and covers: Redump names by serial, MusicBrainz, Wikipedia (or TMDB with a key), the disc's own icons |
 | `disc_report.c` | A short report of every disc, in `diag/discs/` |
 | `drivetest.c` | The guided drive test: a disc at a time, packed into one zip for the drive report form |
 | `web.c`, `http.c` | The HTTP server and JSON API, and the HTTP client |
@@ -75,7 +75,7 @@ Port 8790. Everything the web UI and RipperPS do goes through it.
 | `GET /api/jobs`, `POST /api/jobs/<id>/cancel`, `/retry`, `POST /api/jobs/clear` | The queue |
 | `GET /api/games` | Installed PS4/PS5 games |
 | `GET`, `POST /api/settings`, `GET /api/catalog` | Settings and what they can be |
-| `POST /api/destinations/test`, `GET /api/folders` | Destination check and folder picker |
+| `POST /api/destinations/test`, `GET /api/folders?scope=local\|usb&path=` | Destination check and folder picker |
 | `POST /api/romm/pair`, `/api/romm/pair/cancel`, `GET /api/romm/rommps` | RomM sign-in, and RommPS's server if it's installed |
 | `GET /api/drivetest`, `POST /api/drivetest/disc`, `/finish`, `/discard`, `GET /api/drivetest/file` | The drive test |
 | `GET /api/reports` | Every disc report, drive test and the log, zipped |
@@ -174,14 +174,25 @@ Beyond the "not yet" rows in the README:
 - Blu-ray movies: only a badly scratched disc has been tried, and the drive refused it.
 - AAC and Opus audio on the console (FLAC and MP3 are done).
 - NFS against a real server, and RomM against a real one (tested with a mock).
-- PS4/PS5 dumps of games whose install skips some chunks (other languages): refused for now, since reading those files hangs.
-- Dumped games in a loader such as ShadowMountPlus.
+- A PS5 dump as an exFAT or UFS image in ShadowMountPlus. The folder runs (Deathloop), but the AMPR emulator writes its `ampr_emu.index` into the game's folder on first run, and images are mounted read-only.
+- PS4/PS5 dumps with an update or DLC installed.
 
 ## Roadmap
 
-1. Results from testers' drives: GameCube, Wii, Xbox, Dreamcast and the rest of the CD systems on real discs.
-2. PS3 game folder output for RPCS3.
-3. AACS for Blu-ray movies from a KEYDB.cfg, then MKV for Blu-ray.
-4. PS4/PS5: dump games with chunks left out, and dump discs without installing them.
-5. Redump DATs to name and verify CD dumps, and the `.ss`/`.pfi`/`.dmi` files Redump keeps for Xbox and Nintendo discs.
-6. Faster recovery through wide scratches on CDs.
+Every format a game's targets run, real or emulated, with nothing to convert after (archives like zip and 7z aren't wanted):
+
+1. PS4 and PS5 dumps with the installed update (the system's `-app0-patch0-union` mount).
+2. PS3 game folder (`PS3_GAME`, `PS3_DISC.SFB`) for RPCS3 and PS3 loaders, and the ISO split for FAT32 drives (`.iso.0`, `.iso.1`...).
+3. DLC dumps, beside the game.
+4. PS4 fake PKG (`.pkg`) for GoldHEN and etaHEN, and DLC as packages of their own. The keys come from a file the user supplies, like the PS3 key file. Then the PS5 fake PKG (LibProsperoPkg's format).
+5. The formats each system's players commonly use, still missing:
+    - PS2: CSO and ZSO (PCSX2, OPL). PS1: PBP (emulators, Adrenaline) and VCD (POPStarter).
+    - Wii RVZ that's smaller than the ISO: partitions stored decrypted, which needs the Wii common key (a key file from the user, like the PS3 one).
+    - Xbox: CCI (Cerbios). Xbox 360: Games on Demand (RGH and JTAG consoles).
+    - Dreamcast: CHD (Flycast, RetroArch), once chdman's GD-ROM layout is understood. GDI and BIN/CUE are done.
+6. PS1 and PS2 classics wrappers for the PS4 and PS5 (to research).
+7. Results from testers' drives: GameCube, Wii, Xbox, Dreamcast and the rest of the CD systems on real discs.
+8. AACS for Blu-ray movies from a KEYDB.cfg, then MKV for Blu-ray.
+9. PS4/PS5 discs dumped without installing them, and any game's missing files skipped exactly (from the PS5's `naps_pkg_layout.dat`), not only other regions' languages.
+10. Redump DATs to name and verify CD dumps, and the `.ss`/`.pfi`/`.dmi` files Redump keeps for Xbox and Nintendo discs.
+11. Faster recovery through wide scratches on CDs.

@@ -54,7 +54,16 @@ $(GEN)/gamedb_data.h: third_party/gamedb/gamedb.tsv tools/embed.py
 	@mkdir -p $(GEN)
 	python3 tools/embed.py $< $@ GAMEDB_GZ --gzip
 
-$(ELF): $(SRCS) $(HDRS) $(GEN)/ui_index.h $(GEN)/cacert_pem.h $(GEN)/gamedb_data.h
+# drakmor's PlayGo and AMPR emulators, for PS5 game dumps' fakelib/.
+$(GEN)/emu_playgo.h: third_party/ps5-emulators/libScePlayGo.sprx tools/embed.py
+	@mkdir -p $(GEN)
+	python3 tools/embed.py $< $@ EMU_PLAYGO --raw
+
+$(GEN)/emu_ampr.h: third_party/ps5-emulators/libSceAmpr.sprx tools/embed.py
+	@mkdir -p $(GEN)
+	python3 tools/embed.py $< $@ EMU_AMPR --raw
+
+$(ELF): $(SRCS) $(HDRS) $(GEN)/ui_index.h $(GEN)/cacert_pem.h $(GEN)/gamedb_data.h $(GEN)/emu_playgo.h $(GEN)/emu_ampr.h
 	@mkdir -p $(OUT)
 	$(CC) $(CFLAGS) -o $@ $(SRCS) $(LIBS)
 

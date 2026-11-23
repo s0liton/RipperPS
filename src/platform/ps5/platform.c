@@ -10,6 +10,7 @@
 #include "platform.h"
 
 #include <arpa/inet.h>
+#include <ctype.h>
 #include <dlfcn.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -495,6 +496,9 @@ void plat_notify(const char *title, const char *body) {
     int slot = (g_head + g_count) % NOTIFY_QUEUE;
     svc_str_copy(g_queue[slot][0], sizeof(g_queue[slot][0]), title);
     svc_str_copy(g_queue[slot][1], sizeof(g_queue[slot][1]), body ? body : "");
+    // Bodies are often the service's messages, written to fit in a sentence.
+    g_queue[slot][0][0] = (char)toupper((unsigned char)g_queue[slot][0][0]);
+    g_queue[slot][1][0] = (char)toupper((unsigned char)g_queue[slot][1][0]);
     g_count++;
     pthread_cond_signal(&g_notify_cond);
   }
@@ -605,7 +609,7 @@ int plat_storage_roots(struct plat_root *out, int max) {
   for (i = 0; i < 8 && n < max; i++) {
     char path[32];
     snprintf(path, sizeof(path), "/mnt/usb%d", i);
-    if (svc_dir_exists(path)) {
+    if (svc_is_mount(path)) {
       svc_str_copy(out[n].path, sizeof(out[n].path), path);
       snprintf(out[n].label, sizeof(out[n].label), "USB drive %d (%s)", i + 1, path);
       n++;
@@ -614,7 +618,7 @@ int plat_storage_roots(struct plat_root *out, int max) {
   for (i = 0; i < 2 && n < max; i++) {
     char path[32];
     snprintf(path, sizeof(path), "/mnt/ext%d", i);
-    if (svc_dir_exists(path)) {
+    if (svc_is_mount(path)) {
       svc_str_copy(out[n].path, sizeof(out[n].path), path);
       snprintf(out[n].label, sizeof(out[n].label), "Extended storage (%s)", path);
       n++;

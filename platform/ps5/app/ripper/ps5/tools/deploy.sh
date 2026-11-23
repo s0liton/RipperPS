@@ -14,4 +14,6 @@ root=$(dirname "$ps5")
 vulkan=$(cd -- "${PS5_VULKAN_DIR:-$root/../PS5_Vulkan}" && pwd)
 title_id=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["titleId"])' "$ps5/sce_sys/param.json")
 [[ -d $root/dist/$title_id ]] || { echo "no dist/$title_id: run ps5/tools/build.sh first" >&2; exit 2; }
-exec python3 "$vulkan/tools/deploy-title-folder.py" --always eboot.bin "$root/dist/$title_id" "$@"
+# The payload RipperPS carries changes without changing size often enough
+# that a size check can't tell: it always goes too.
+exec python3 "$vulkan/tools/deploy-title-folder.py" --always eboot.bin --always assets/ripper/ripper.elf "$root/dist/$title_id" "$@"

@@ -197,3 +197,50 @@ void rip_aes128_cbc_decrypt(const struct rip_aes128 *ctx, uint8_t iv[16], uint8_
     memcpy(iv, cipher, 16);
   }
 }
+
+static void xts_crypt(const struct rip_aes128 *data, const struct rip_aes128 *tweak, uint64_t unit, uint8_t *buf,
+                      size_t len, int enc) {
+  uint8_t t[16];
+  size_t off;
+  int i;
+
+  for (i = 0; i < 8; i++) {
+    t[i] = (uint8_t)(unit >> (8 * i));
+  }
+  memset(t + 8, 0, 8);
+  rip_aes128_encrypt_block(tweak, t, t);
+  for (off = 0; off + 16 <= len; off += 16) {
+    uint8_t *b = buf + off;
+    uint8_t carry = 0;
+    for (i = 0; i < 16; i++) {
+      b[i] ^= t[i];
+    }
+    if (enc) {
+      rip_aes128_encrypt_block(data, b, b);
+    } else {
+      rip_aes128_decrypt_block(data, b, b);
+    }
+    for (i = 0; i < 16; i++) {
+      b[i] ^= t[i];
+    }
+    // The next block's tweak: times x in GF(2^128), little-endian.
+    for (i = 0; i < 16; i++) {
+      uint8_t next = (uint8_t)(t[i] >> 7);
+      t[i] = (uint8_t)((t[i] << 1) | carry);
+      carry = next;
+    }
+    if (carry) {
+      t[0] ^= 0x87;
+    }
+  }
+}
+
+void rip_aes128_xts_encrypt(const struct rip_aes128 *data, const struct rip_aes128 *tweak, uint64_t unit, uint8_t *buf,
+                            size_t len) {
+  xts_crypt(data, tweak, unit, buf, len, 1);
+}
+
+void rip_aes128_xts_decrypt(const struct rip_aes128 *data, const struct rip_aes128 *tweak, uint64_t unit, uint8_t *buf,
+                            size_t len) {
+  xts_crypt(data, tweak, unit, buf, len, 0);
+}

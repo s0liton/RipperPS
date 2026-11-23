@@ -47,11 +47,12 @@ Any disc helps. These help most, most wanted first:
 | Xbox (original) | The same for XGD1 | Kreon, OmniDrive |
 | Wii U | Raw Blu-ray reads with Nintendo's seed | OmniDrive on a Blu-ray drive |
 | Dreamcast (GD-ROM) | Whether the high-density area reads | CD drives that read past the lead-out (Plextor, some Lite-On) |
-| Saturn, Sega CD, PC Engine CD, 3DO, CD-i, PS1 | Identification, C2, subchannel and offsets for CD games | Any CD drive; Plextor best |
+| Saturn, Sega CD, PC Engine CD, 3DO, CD-i, PS1 | Identification, C2, subchannel and offsets for CD games | Any CD drive, Plextor best |
 | Xbox One or Series | What a USB Blu-ray drive shows of them | Any Blu-ray drive |
 | Music CD | Read offset, C2 and accurate audio | Any CD drive |
 | PS4 or PS5 game | Whether a USB drive reads them at all | Any Blu-ray drive |
-| DVD or Blu-ray movie | Copy protection handling, read speed | Any; LibreDrive for 4K |
+| 4K Blu-ray movie | Whether the movie comes out without bus encryption, through a normal read or OmniDrive's raw one | OmniDrive or LibreDrive on a 4K-capable drive |
+| DVD or Blu-ray movie | Copy protection handling, read speed | Any |
 
 ## What's in the zip
 

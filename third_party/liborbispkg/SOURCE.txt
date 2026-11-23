@@ -1,0 +1,8 @@
+LibOrbisPkg by maxton, maintained by OpenOrbis, https://github.com/OpenOrbis/LibOrbisPkg
+commit 92a4e7f8e5914cb06b52ba3ae6b0675da438a051. LGPL-3.0.
+
+Nothing is copied here. src/core/fpkg.c and src/core/pfs.c are a C port of its
+PS4 package writer (PKG/, PFS/, Rif/, PlayGo/, SFO/ParamSfo.cs, Util/Crypto.cs,
+Util/MersenneTwister.cs), conveyed under the GPL-3.0 as section 2 of the LGPL-3.0
+allows. No keys are taken from it: Util/Keys.cs is where users find the values
+for their key file (docs/ps4-fpkg-keys.md).

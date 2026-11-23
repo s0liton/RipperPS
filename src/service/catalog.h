@@ -31,6 +31,8 @@ int catalog_recipe_id(const char *format, enum rip_recipe_id *out);
 
 // A profile with every default filled in.
 cJSON *catalog_default_profile(const struct cat_system *s);
+// A format's options as they are by default (an empty object for an unknown format).
+cJSON *catalog_format_defaults(const char *format);
 // Format options from a profile or a rip request onto the job's options:
 // unknown keys and values are dropped, missing ones get defaults.
 void catalog_job_options(const char *format, const cJSON *options, struct rip_job_opts *opts);

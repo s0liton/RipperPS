@@ -41,7 +41,25 @@ static int visit(struct walk *w, const char *dir, int count) {
       rc = visit(w, path, count);
       continue;
     }
-    if (!S_ISREG(st.st_mode) || !sce_is_elf(path)) {
+    if (!S_ISREG(st.st_mode)) {
+      continue;
+    }
+    if (w->opts->fself && sce_is_self(path)) {
+      // Already fake-signed (an earlier dump): made the asked console's.
+      if (count) {
+        w->total++;
+      } else if (sce_retarget_fself(path, w->opts->target) < 0) {
+        RIP_WARN("%s is a SELF RipperPS didn't make, left as it is", path);
+      }
+      if (!count) {
+        w->done++;
+        if (w->progress && w->progress(w->ud, w->done, w->total)) {
+          w->stop = 1;
+        }
+      }
+      continue;
+    }
+    if (!sce_is_elf(path)) {
       continue;
     }
     if (count) {

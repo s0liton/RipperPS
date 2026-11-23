@@ -1,0 +1,16 @@
+drakmor's PS5 library emulators, as released (built with Sony's SDK, which
+RipperPS doesn't use). Both GPL-3.0, LICENSE. Every PS5 game dump gets them in
+its fakelib/ folder, where ShadowMountPlus loads them in place of the system's.
+
+libScePlayGo.sprx: pgo_stub 0.6, https://github.com/drakmor/pgo_stub
+  (tag 0.6, commit c95dec77756342fc150d4aec76bcf1d48c913b2b)
+  https://github.com/drakmor/pgo_stub/releases/download/0.6/libScePlayGo.sprx
+  sha256 f5fdb0ed6cc7413e6dcac79a62e0efd8cfbae04cca0bf932e7a741aed850d213
+
+libSceAmpr.sprx: ampr_emu 0.4.2.1, https://github.com/drakmor/ampr_emu
+  (tag 0.4.2.1, commit e0b24bdfc344e37e8aced99a22e6f9f5c65d9152)
+  https://github.com/drakmor/ampr_emu/releases/download/0.4.2.1/libSceAmpr.sprx
+  sha256 69e6c4d5e4f5fb83c9e01815db5861c4c75734acbf4595cafa50d4c218116d1a
+
+A copy in ShadowMountPlus's emulator folder (/data/shadowmount/emus) is used
+instead when there is one.

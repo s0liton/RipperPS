@@ -104,7 +104,7 @@ static int heartbeat(const struct romm *r, char *version, size_t vn, char *err, 
   http_resp_free(&resp);
   sscanf(version, "%d.%d", &major, &minor);
   if (major && (major < 5 || (major == 5 && minor < 4))) {
-    snprintf(err, en, "RomM %s found; uploads need RomM 5.4 or newer", version);
+    snprintf(err, en, "RomM %s found, but uploads need RomM 5.4 or newer", version);
     return RIP_ERR;
   }
   return RIP_OK;
@@ -125,7 +125,7 @@ int deliver_romm_test(const cJSON *dest, char *msg, size_t n) {
     return RIP_ERR;
   }
   if (!r.token[0]) {
-    snprintf(msg, n, "RomM %s found; pair the console to upload", version);
+    snprintf(msg, n, "RomM %s found. Sign in to RomM to upload", version);
     return RIP_ERR;
   }
   call(&r, "GET", "/api/users/me", NULL, NULL, NULL, 0, &resp);
@@ -335,7 +335,7 @@ int deliver_romm(const struct deliver_req *req, char *where, size_t wn, char *er
 
   romm_from(req->dest, &r);
   if (!req->romm_platform || !req->romm_platform[0]) {
-    snprintf(err, en, "this kind of disc has no RomM platform; send it to another destination");
+    snprintf(err, en, "this kind of disc has no RomM platform. Send it to another destination");
     return RIP_ERR;
   }
   if (!r.token[0]) {
@@ -487,7 +487,7 @@ static void *pair_poll(void *arg) {
     http_resp_free(&resp);
   }
   if (left == 0 && p->gen == g_pair_gen) {
-    pair_set("error", "The code expired; start again");
+    pair_set("error", "The code expired. Start again");
   }
   free(p);
   return NULL;

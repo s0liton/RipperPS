@@ -29,5 +29,13 @@ void test_rip_all(void);
 void test_formats(void);
 void test_firmware(void);
 void test_identify(void);
+void test_langs(void);
+void test_iso_extract(void);
+void test_split(void);
+void test_wbfs(void);
+void test_rvz(void);
+void test_aacs(void);
+void test_game_images(void);
+void test_fpkg(void);
 
 #endif

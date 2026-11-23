@@ -33,8 +33,13 @@ struct fake_drive {
   const uint8_t *xbox_ss;
   int unlocked;
   // OmniDrive's raw read (C0) hands out the image's sectors as frames
-  // scrambled the way the disc has them: 1 a Nintendo DVD, 2 a Wii U Blu-ray.
+  // scrambled the way the disc has them: 1 a Nintendo DVD, 2 a Wii U Blu-ray,
+  // 3 any other Blu-ray.
   int nintendo;
+  // Bus encryption, as a 4K disc's drive adds it: READ(12) garbles the
+  // sectors from bus_from up to bus_to; the raw read doesn't.
+  uint32_t bus_from;
+  uint32_t bus_to;
 };
 
 void fake_drive_transport(struct fake_drive *fd, struct rip_transport *t);

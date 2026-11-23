@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -13,6 +14,9 @@
 #include "ripper/hash.h"
 #include "ripper/log.h"
 #include "ripper/mmc.h"
+#include "ripper/omnidrive.h"
+#include "ripper/reader.h"
+#include "ripper/udf.h"
 #include "ripper/util.h"
 
 #ifndef RIPPER_VERSION
@@ -22,7 +26,7 @@
 #define BUF_BYTES (1024u * 1024)
 #define SHORT_MS 10000u
 #define READ_MS 30000u
-#define STEPS 11
+#define STEPS 12
 
 struct diag {
   struct rip_transport *t;
@@ -322,7 +326,8 @@ static void drive_identity(struct diag *d) {
       finding(d, "firmware: SpiralDrive (%.20s)", b + 36);
     } else if (b[4] + 5u < 86) {
       finding(d,
-              "firmware: no custom firmware mark (INQUIRY is %u bytes, too short to carry one; a USB enclosure can cut it)",
+              "firmware: no custom firmware mark (its INQUIRY is %u bytes, too short to carry one, which a USB "
+              "enclosure can cause)",
               b[4] + 5u);
     } else {
       finding(d, "firmware: no OmniDrive or SpiralDrive mark (LibreDrive can't be seen from here)");
@@ -1118,6 +1123,136 @@ static void game_headers(struct diag *d) {
   }
 }
 
+// What a stream's first aligned unit (6144 bytes, 32 packets of 192) came
+// back as. AACS leaves each unit's first 16 bytes in the clear, so the first
+// packet's sync byte shows through even when the rest is encrypted; bus
+// encryption, added by the drive on the way out, hides that too.
+static const char *unit_kind(const uint8_t *u) {
+  unsigned synced = 0;
+  unsigned zero = 1;
+  unsigned i;
+
+  for (i = 0; i < 32; i++) {
+    synced += u[i * 192 + 4] == 0x47;
+  }
+  for (i = 0; i < 6144 && zero; i++) {
+    zero = u[i] == 0;
+  }
+  if (zero) {
+    return "all zeros (the drive withheld it)";
+  }
+  if (synced == 32 && !(u[0] & 0xC0)) {
+    return "plain video (not encrypted)";
+  }
+  if (u[4] == 0x47 && (u[0] & 0xC0)) {
+    return "AACS data with the unit's head in the clear (no bus encryption)";
+  }
+  return "scrambled from the first byte (bus encryption)";
+}
+
+struct largest {
+  struct udf_entry *e;
+};
+
+static int largest_stream(const char *name, const struct udf_entry *e, void *user) {
+  struct largest *l = user;
+  size_t n = strlen(name);
+
+  if (!e->is_dir && n > 5 && !strcasecmp(name + n - 5, ".m2ts") && e->extent_count && e->size >= 6144 &&
+      e->size > l->e->size) {
+    *l->e = *e;
+  }
+  return 0;
+}
+
+// Blu-ray movies, 4K ones above all: whether the disc asks for bus
+// encryption, and what the drive hands over of a stream, by a normal read
+// and by OmniDrive's raw one (a way past bus encryption, if it is one).
+static void movie_reads(struct diag *d) {
+  struct rip_reader r;
+  struct udf_fs *fs = NULL;
+  struct udf_entry *e = NULL;
+  struct udf_entry *dir = NULL;
+  struct largest l;
+  uint8_t cdb[12];
+  uint8_t *cert = NULL;
+  size_t cert_len = 0;
+  uint32_t lba;
+  unsigned i;
+
+  section(d, "Blu-ray movie reads");
+  if (!d->is_bd) {
+    say(d, "not a Blu-ray");
+    return;
+  }
+  if (rip_reader_open_mmc(&r, d->t) != RIP_OK) {
+    say(d, "the disc can't be read as 2048-byte sectors");
+    return;
+  }
+  fs = malloc(sizeof(*fs));
+  e = calloc(1, sizeof(*e));
+  dir = malloc(sizeof(*dir));
+  if (!fs || !e || !dir || udf_mount(fs, &r) != RIP_OK) {
+    say(d, "no UDF file system");
+    goto done;
+  }
+  if ((udf_lookup(fs, "AACS/Content000.cer", dir) == RIP_OK || udf_lookup(fs, "AACS/Content001.cer", dir) == RIP_OK) &&
+      udf_read_file(fs, dir, 1 << 16, &cert, &cert_len) == RIP_OK && cert_len >= 26) {
+    const char *version = cert[0] == 0x10 ? "AACS 2 (4K)" : cert[0] == 0x00 ? "AACS 1" : "unknown";
+    say(d, "content certificate: type %02x, bus encryption flag %d", cert[0], cert[1] >> 7);
+    finding(d, "Blu-ray movie: %s, bus encryption %s", version, cert[1] >> 7 ? "required" : "not required");
+  } else {
+    finding(d, "Blu-ray movie: no AACS content certificate");
+  }
+  l.e = e;
+  if (udf_lookup(fs, "BDMV/STREAM", dir) == RIP_OK) {
+    udf_list(fs, dir, largest_stream, &l);
+  }
+  if (!e->size) {
+    say(d, "no movie stream to read");
+    goto done;
+  }
+  lba = e->extents[0].lba;
+  say(d, "largest stream: %llu bytes at sector %u", (unsigned long long)e->size, lba);
+  memset(cdb, 0, sizeof(cdb));
+  cdb[0] = 0xA8;  // READ(12), as rips read
+  cdb_lba(cdb, 2, lba);
+  rip_put_be32(cdb + 6, 3);
+  if (cmd(d, "read12 stream unit", cdb, 12, RIP_DIR_IN, 6144, READ_MS, 6144, NULL) == RIP_OK) {
+    finding(d, "Movie stream, normal read: %s", unit_kind(d->buf));
+  } else {
+    finding(d, "Movie stream, normal read: refused (the drive wants to authenticate first)");
+  }
+  if (d->omnidrive) {
+    size_t frame = BD_RAW_FRAME;
+    memset(cdb, 0, sizeof(cdb));
+    cdb[0] = 0xC0;
+    cdb[1] = OMNI_BD;
+    cdb_lba(cdb, 2, lba);
+    rip_put_be32(cdb + 6, 3);
+    if (cmd(d, "omnidrive raw stream unit", cdb, 12, RIP_DIR_IN, 3 * frame, READ_MS, 3 * frame, NULL) == RIP_OK) {
+      uint8_t unit[6144];
+      int good = 1;
+      for (i = 0; i < 3; i++) {
+        uint8_t *f = d->buf + i * frame;
+        bd_descramble(f, (int32_t)(lba + i), 0);
+        good &= dvd_edc(f, 2048) == rip_be32(f + 2048);
+        memcpy(unit + i * 2048, f, 2048);
+      }
+      finding(d, "Movie stream, OmniDrive raw read: %s%s", unit_kind(unit), good ? "" : " (EDC mismatch)");
+    } else {
+      finding(d, "Movie stream, OmniDrive raw read: refused");
+    }
+  }
+
+done:
+  free(cert);
+  free(fs);
+  free(e);
+  free(dir);
+  rip_reader_close(&r);
+}
+
 int diag_run(struct rip_transport *t, const char *out_dir, diag_progress_fn progress, void *ud,
              const volatile int *cancel, struct diag_summary *summary) {
   struct diag d;
@@ -1189,6 +1324,11 @@ int diag_run(struct rip_transport *t, const char *out_dir, diag_progress_fn prog
   }
   if (!stopped(&d) && d.profile) {
     game_headers(&d);
+  }
+  if (!stopped(&d) && d.profile) {
+    movie_reads(&d);
+  } else {
+    d.step++;
   }
   say(&d, "\n== Findings ==\n%s", summary->findings);
   say(&d, "%d commands, %d taken", summary->commands, summary->answered);

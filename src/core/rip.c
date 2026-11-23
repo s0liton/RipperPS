@@ -1,34 +1,42 @@
 #include "ripper/rip.h"
 
+#include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "rip_internal.h"
+#include "ripper/aacs.h"
 #include "ripper/audio_out.h"
 #include "ripper/chd.h"
+#include "ripper/ciso.h"
 #include "ripper/common.h"
 #include "ripper/css.h"
 #include "ripper/dvd.h"
+#include "ripper/iso9660.h"
 #include "ripper/log.h"
 #include "ripper/mmc.h"
 #include "ripper/omnidrive.h"
 #include "ripper/ps3.h"
 #include "ripper/remux.h"
+#include "ripper/rvz.h"
 #include "ripper/util.h"
+#include "ripper/wbfs.h"
 #include "ripper/xbox.h"
+#include "ripper/xiso.h"
 
 static const struct rip_recipe RECIPES[] = {
     // Readable by the PS5's own drive.
     {RIP_DISC_PS2_DVD, RIP_RECIPE_ISO, "ISO", RIP_CAP_READ_DVD, RIP_RECIPE_READY},
     {RIP_DISC_PS2_DVD, RIP_RECIPE_CHD, "CHD", RIP_CAP_READ_DVD, RIP_RECIPE_READY},
     {RIP_DISC_PS3_BD, RIP_RECIPE_PS3_ISO, "Decrypted ISO", RIP_CAP_READ_BD, RIP_RECIPE_READY},
-    {RIP_DISC_PS3_BD, RIP_RECIPE_FOLDER, "Game folder", RIP_CAP_READ_BD, RIP_RECIPE_PLANNED},
+    {RIP_DISC_PS3_BD, RIP_RECIPE_FOLDER, "Game folder", RIP_CAP_READ_BD, RIP_RECIPE_READY},
     {RIP_DISC_PS3_DVD, RIP_RECIPE_PS3_ISO, "Decrypted ISO", RIP_CAP_READ_DVD, RIP_RECIPE_READY},
-    {RIP_DISC_PS3_DVD, RIP_RECIPE_FOLDER, "Game folder", RIP_CAP_READ_DVD, RIP_RECIPE_PLANNED},
+    {RIP_DISC_PS3_DVD, RIP_RECIPE_FOLDER, "Game folder", RIP_CAP_READ_DVD, RIP_RECIPE_READY},
     // PS4/PS5: the console decrypts the installed game (platform.h plat_game_dump).
     {RIP_DISC_PS4_BD, RIP_RECIPE_SYSTEM_DUMP, "Game folder", RIP_CAP_READ_BD, RIP_RECIPE_READY},
     {RIP_DISC_PS5_BD, RIP_RECIPE_SYSTEM_DUMP, "Game folder", RIP_CAP_READ_BD, RIP_RECIPE_READY},
@@ -38,10 +46,13 @@ static const struct rip_recipe RECIPES[] = {
     {RIP_DISC_DVD_VIDEO, RIP_RECIPE_MP4, "MP4", RIP_CAP_READ_DVD, RIP_RECIPE_READY},
     {RIP_DISC_DVD_VIDEO, RIP_RECIPE_ISO, "ISO", RIP_CAP_READ_DVD, RIP_RECIPE_READY},
     {RIP_DISC_BD_DATA, RIP_RECIPE_ISO, "ISO", RIP_CAP_READ_BD, RIP_RECIPE_READY},
+    // Decrypted with the KEYDB.cfg's key (aacs.h), else as it is.
     {RIP_DISC_BD_VIDEO, RIP_RECIPE_ISO, "ISO", RIP_CAP_READ_BD, RIP_RECIPE_READY},
     // Need an external drive with a CD laser.
     {RIP_DISC_PS1, RIP_RECIPE_BINCUE, "BIN/CUE", RIP_CAP_READ_CD, RIP_RECIPE_READY},
     {RIP_DISC_PS1, RIP_RECIPE_CHD, "CHD", RIP_CAP_READ_CD, RIP_RECIPE_READY},
+    // OPL and PCSX2 take a PS2 CD game as an ISO too.
+    {RIP_DISC_PS2_CD, RIP_RECIPE_ISO, "ISO", RIP_CAP_READ_CD, RIP_RECIPE_READY},
     {RIP_DISC_PS2_CD, RIP_RECIPE_BINCUE, "BIN/CUE", RIP_CAP_READ_CD, RIP_RECIPE_READY},
     {RIP_DISC_PS2_CD, RIP_RECIPE_CHD, "CHD", RIP_CAP_READ_CD, RIP_RECIPE_READY},
     {RIP_DISC_CD_DATA, RIP_RECIPE_BINCUE, "BIN/CUE", RIP_CAP_READ_CD, RIP_RECIPE_READY},
@@ -52,6 +63,8 @@ static const struct rip_recipe RECIPES[] = {
     {RIP_DISC_CD_AUDIO, RIP_RECIPE_ALAC, "ALAC", RIP_CAP_READ_CD, RIP_RECIPE_READY},
     {RIP_DISC_CD_AUDIO, RIP_RECIPE_OPUS, "Opus", RIP_CAP_READ_CD, RIP_RECIPE_READY},
     {RIP_DISC_CD_AUDIO, RIP_RECIPE_WAV, "WAV", RIP_CAP_READ_CD, RIP_RECIPE_READY},
+    // The disc as it is, to burn a copy.
+    {RIP_DISC_CD_AUDIO, RIP_RECIPE_BINCUE, "BIN/CUE", RIP_CAP_READ_CD, RIP_RECIPE_READY},
 #define CD_GAME(kind, emu)                                                \
   {kind, RIP_RECIPE_CHD, "CHD", RIP_CAP_READ_CD, RIP_RECIPE_READY}, {     \
     kind, RIP_RECIPE_BINCUE, "BIN/CUE", RIP_CAP_READ_CD, RIP_RECIPE_READY \
@@ -66,11 +79,16 @@ static const struct rip_recipe RECIPES[] = {
 #undef CD_GAME
     {RIP_DISC_VIDEO_CD, RIP_RECIPE_BINCUE, "BIN/CUE", RIP_CAP_READ_CD, RIP_RECIPE_READY},
     // The game partition is behind the drive's lock: Kreon or OmniDrive firmware.
-    {RIP_DISC_XBOX, RIP_RECIPE_ISO, "ISO (xemu)", RIP_CAP_READ_DVD | RIP_CAP_XBOX, RIP_RECIPE_READY},
+    {RIP_DISC_XBOX, RIP_RECIPE_XISO, "XISO (xemu)", RIP_CAP_READ_DVD | RIP_CAP_XBOX, RIP_RECIPE_READY},
+    {RIP_DISC_XBOX, RIP_RECIPE_ISO, "ISO (Redump)", RIP_CAP_READ_DVD | RIP_CAP_XBOX, RIP_RECIPE_READY},
     {RIP_DISC_XBOX_360, RIP_RECIPE_ISO, "ISO (Xenia)", RIP_CAP_READ_DVD | RIP_CAP_XBOX, RIP_RECIPE_READY},
     // Nintendo's scrambling: OmniDrive's raw read, descrambled here.
     {RIP_DISC_GAMECUBE, RIP_RECIPE_ISO, "ISO (Dolphin)", RIP_CAP_READ_DVD | RIP_CAP_OMNIDRIVE, RIP_RECIPE_READY},
+    {RIP_DISC_GAMECUBE, RIP_RECIPE_CISO, "CISO (Nintendont)", RIP_CAP_READ_DVD | RIP_CAP_OMNIDRIVE, RIP_RECIPE_READY},
+    {RIP_DISC_GAMECUBE, RIP_RECIPE_RVZ, "RVZ (Dolphin)", RIP_CAP_READ_DVD | RIP_CAP_OMNIDRIVE, RIP_RECIPE_READY},
+    {RIP_DISC_WII, RIP_RECIPE_WBFS, "WBFS (USB Loader GX)", RIP_CAP_READ_DVD | RIP_CAP_OMNIDRIVE, RIP_RECIPE_READY},
     {RIP_DISC_WII, RIP_RECIPE_ISO, "ISO (Dolphin)", RIP_CAP_READ_DVD | RIP_CAP_OMNIDRIVE, RIP_RECIPE_READY},
+    {RIP_DISC_WII, RIP_RECIPE_RVZ, "RVZ (Dolphin)", RIP_CAP_READ_DVD | RIP_CAP_OMNIDRIVE, RIP_RECIPE_READY},
     {RIP_DISC_WII_U, RIP_RECIPE_ISO, "WUD (Cemu)", RIP_CAP_READ_BD | RIP_CAP_OMNIDRIVE, RIP_RECIPE_READY},
     // Both areas of a GD-ROM, with a .gdi beside the sheet; the drive has to reach the high-density one.
     {RIP_DISC_DREAMCAST, RIP_RECIPE_BINCUE, "GDI + BIN/CUE (Flycast)", RIP_CAP_READ_CD, RIP_RECIPE_READY},
@@ -555,6 +573,172 @@ static int finish_ps3(const struct rip_job_opts *opts, char *stem, size_t stem_l
   return RIP_OK;
 }
 
+static int extract_progress(void *ud, uint64_t done, uint64_t total) {
+  const struct rip_job_opts *opts = ud;
+  if (opts->progress) {
+    opts->progress("extracting", done, total, opts->user);
+  }
+  return opts->cancel && *opts->cancel;
+}
+
+// A PS3 game folder (PS3_GAME, PS3_DISC.SFB...), as RPCS3 and PS3 loaders take
+// it: the decrypted image's files, the image itself gone after.
+static int ps3_folder(const struct rip_job_opts *opts, const char *stem, struct rip_job_result *res) {
+  char folder[1024];
+  struct rip_reader r;
+  struct iso_fs fs;
+  struct stat st;
+  int64_t size = stat(res->image_path, &st) == 0 ? (int64_t)st.st_size : -1;
+  int fd;
+  int rc;
+
+  if (!res->decrypted) {
+    RIP_ERROR("a PS3 game folder needs the disc's key; without one only an encrypted ISO can be made");
+    return RIP_ERR;
+  }
+  if (rip_unique_path(opts->out_dir, stem, "", folder, sizeof(folder)) != RIP_OK) {
+    return RIP_ERR;
+  }
+  fd = open(res->image_path, O_RDONLY);
+  if (fd < 0 || size <= 0 || rip_reader_open_fd(&r, fd, 2048, (uint64_t)size, 1) != RIP_OK) {
+    if (fd >= 0) {
+      close(fd);
+    }
+    return RIP_ERR;
+  }
+  rc = iso_mount(&fs, &r);
+  if (rc == RIP_OK) {
+    rc = iso_extract(&fs, folder, extract_progress, (void *)opts);
+  }
+  rip_reader_close(&r);
+  if (rc != RIP_OK) {
+    RIP_ERROR("couldn't extract %s into %s", res->image_path, folder);
+    return rc;
+  }
+  unlink(res->image_path);
+  snprintf(res->image_path, sizeof(res->image_path), "%s", folder);
+  return RIP_OK;
+}
+
+// webMAN and IRISMAN's parts: <name>.iso.0, .iso.1... of 0xFFFF0000 bytes, in
+// a folder of their own (webMAN looks one folder deep). An image that fits
+// FAT32 as it is stays whole.
+#define PS3_SPLIT_PART 0xFFFF0000ull
+
+static int ps3_split(const struct rip_job_opts *opts, const char *stem, struct rip_job_result *res) {
+  char folder[1024];
+  char prefix[2100];
+  const char *base = strrchr(res->image_path, '/');
+  struct stat st;
+
+  if (stat(res->image_path, &st) != 0 || (uint64_t)st.st_size <= PS3_SPLIT_PART) {
+    return RIP_OK;
+  }
+  if (rip_unique_path(opts->out_dir, stem, "", folder, sizeof(folder)) != RIP_OK || rip_mkdir_p(folder) != 0) {
+    return RIP_ERR;
+  }
+  snprintf(prefix, sizeof(prefix), "%s/%s", folder, base ? base + 1 : res->image_path);
+  if (rip_split_file(res->image_path, PS3_SPLIT_PART, prefix) != RIP_OK) {
+    RIP_ERROR("couldn't split %s for FAT32", res->image_path);
+    rmdir(folder);
+    return RIP_ERR;
+  }
+  snprintf(res->image_path, sizeof(res->image_path), "%s", folder);
+  return RIP_OK;
+}
+
+// The image as read becomes the format asked for: written beside it, then
+// put in its place. The manifest keeps the read image's hashes, the ones
+// Redump lists.
+struct convert_progress {
+  const struct rip_job_opts *opts;
+  const char *phase;
+};
+
+static int converting(void *ud, uint64_t done, uint64_t total) {
+  const struct convert_progress *c = ud;
+  if (c->opts->progress) {
+    c->opts->progress(c->phase, done, total, c->opts->user);
+  }
+  return c->opts->cancel && *c->opts->cancel;
+}
+
+static int convert_image(enum rip_recipe_id id, const struct rip_job_opts *opts, const char *stem,
+                         struct rip_job_result *res) {
+  const char *ext = id == RIP_RECIPE_CISO ? ".ciso" : id == RIP_RECIPE_RVZ ? ".rvz" : ".iso";
+  struct convert_progress cp = {opts, id == RIP_RECIPE_XISO ? "trimming" : "compressing"};
+  char out[sizeof(res->image_path)];
+  char part[sizeof(res->image_path) + 8];
+  int rc;
+
+  if (id != RIP_RECIPE_XISO) {
+    if (rip_unique_path(opts->out_dir, stem, ext, out, sizeof(out)) != RIP_OK) {
+      return RIP_ERR;
+    }
+  } else {
+    // An XISO keeps the name: it replaces the image it came from.
+    snprintf(out, sizeof(out), "%s", res->image_path);
+  }
+  snprintf(part, sizeof(part), "%s.part", out);
+  // Level 5, Dolphin's own default for RVZ.
+  rc = id == RIP_RECIPE_CISO  ? ciso_from_iso(res->image_path, part, converting, &cp)
+       : id == RIP_RECIPE_RVZ ? rvz_from_iso(res->image_path, part, 5, converting, &cp)
+                              : xiso_from_iso(res->image_path, part, converting, &cp);
+  if (rc != RIP_OK) {
+    unlink(part);
+    return rc;
+  }
+  if (unlink(res->image_path) != 0 || rename(part, out) != 0) {
+    RIP_ERROR("cannot put %s in place: %s", out, strerror(errno));
+    return RIP_ERR;
+  }
+  snprintf(res->image_path, sizeof(res->image_path), "%s", out);
+  return RIP_OK;
+}
+
+// A Wii disc the way USB Loader GX and WiiFlow find it: "<name> [ID6]/ID6.wbfs",
+// in FAT32-sized parts when asked.
+static int convert_wbfs(const struct rip_job_opts *opts, const char *stem, struct rip_job_result *res) {
+  struct convert_progress cp = {opts, "converting"};
+  char id[7] = "";
+  char folder[sizeof(res->image_path)];
+  char name[300];
+  char out[sizeof(res->image_path) + 16];
+  int fd = open(res->image_path, O_RDONLY);
+  int rc;
+  int i;
+
+  if (fd < 0 || rip_seek_read(fd, 0, id, 6) != 0) {
+    RIP_ERROR("cannot read %s: %s", res->image_path, strerror(errno));
+    if (fd >= 0) {
+      close(fd);
+    }
+    return RIP_ERR;
+  }
+  close(fd);
+  for (i = 0; i < 6; i++) {
+    if (!isalnum((unsigned char)id[i])) {
+      id[i] = '_';
+    }
+  }
+  snprintf(name, sizeof(name), strstr(stem, id) ? "%s" : "%s [%s]", stem, id);
+  if (rip_unique_path(opts->out_dir, name, "", folder, sizeof(folder)) != RIP_OK || rip_mkdir_p(folder) != 0) {
+    RIP_ERROR("cannot create the folder for %s", name);
+    return RIP_ERR;
+  }
+  snprintf(out, sizeof(out), "%s/%s.wbfs", folder, id);
+  rc = wbfs_from_iso(res->image_path, out, opts->split_fat32 ? WBFS_SPLIT_FAT32 : 0, converting, &cp);
+  if (rc != RIP_OK) {
+    rmdir(folder);
+    return rc;
+  }
+  if (unlink(res->image_path) != 0) {
+    RIP_WARN("cannot remove %s: %s", res->image_path, strerror(errno));
+  }
+  snprintf(res->image_path, sizeof(res->image_path), "%s", folder);
+  return RIP_OK;
+}
+
 static int movie_progress(void *ud, uint64_t done, uint64_t total) {
   const struct rip_job_opts *opts = ud;
   if (opts->progress) {
@@ -633,8 +817,10 @@ int rip_run(const struct rip_recipe *recipe, struct rip_drive *drive, struct rip
     return RIP_ENOTSUP;
   }
   if (recipe->id != RIP_RECIPE_ISO && recipe->id != RIP_RECIPE_PS3_ISO && recipe->id != RIP_RECIPE_CHD &&
+      !(recipe->id == RIP_RECIPE_FOLDER && (disc->kind == RIP_DISC_PS3_BD || disc->kind == RIP_DISC_PS3_DVD)) &&
       recipe->id != RIP_RECIPE_BINCUE && !rip_recipe_is_audio(recipe->id) && recipe->id != RIP_RECIPE_MKV &&
-      recipe->id != RIP_RECIPE_MP4) {
+      recipe->id != RIP_RECIPE_MP4 && recipe->id != RIP_RECIPE_XISO && recipe->id != RIP_RECIPE_CISO &&
+      recipe->id != RIP_RECIPE_WBFS && recipe->id != RIP_RECIPE_RVZ) {
     return RIP_ENOTSUP;
   }
   if (recipe->id == RIP_RECIPE_MKV || recipe->id == RIP_RECIPE_MP4) {
@@ -693,6 +879,20 @@ int rip_run(const struct rip_recipe *recipe, struct rip_drive *drive, struct rip
   if (is_nintendo(disc->kind) ||
       ((disc->kind == RIP_DISC_XBOX || disc->kind == RIP_DISC_XBOX_360) && !disc->xbox_partition)) {
     rc = dump_custom(drive, reader, disc, res->image_path, opts, &res->hashes);
+  } else if (disc->kind == RIP_DISC_BD_VIDEO) {
+    // A Blu-ray movie: its streams decrypted as they're read, when the
+    // KEYDB.cfg has the disc's key; else the image as it is.
+    struct rip_reader aacs;
+    int ar = rip_reader_open_aacs(&aacs, reader, opts->aacs_keydb, res->aacs_why, sizeof(res->aacs_why));
+    if (ar == RIP_OK) {
+      rc = dump_image(drive, &aacs, res->image_path, recipe->id == RIP_RECIPE_CHD, opts, &res->hashes);
+      rip_reader_close(&aacs);
+      res->aacs = 1;
+      res->decrypted = rc == RIP_OK;
+    } else {
+      res->aacs = ar == RIP_ENOTSUP ? 0 : 2;
+      rc = dump_image(drive, reader, res->image_path, recipe->id == RIP_RECIPE_CHD, opts, &res->hashes);
+    }
   } else if (disc->css) {
     // DVD-Video: the drive authenticated, the VOBs descrambled as they're read.
     struct rip_reader css;
@@ -708,8 +908,18 @@ int rip_run(const struct rip_recipe *recipe, struct rip_drive *drive, struct rip
   if (rc != RIP_OK) {
     return rc;
   }
-  if (recipe->id == RIP_RECIPE_PS3_ISO) {
+  if (recipe->id == RIP_RECIPE_XISO || recipe->id == RIP_RECIPE_CISO || recipe->id == RIP_RECIPE_RVZ) {
+    rc = convert_image(recipe->id, opts, stem, res);
+  } else if (recipe->id == RIP_RECIPE_WBFS) {
+    rc = convert_wbfs(opts, stem, res);
+  }
+  if (recipe->id == RIP_RECIPE_PS3_ISO || recipe->id == RIP_RECIPE_FOLDER) {
     rc = finish_ps3(opts, stem, sizeof(stem), res, &key_source);
+    if (rc == RIP_OK && recipe->id == RIP_RECIPE_FOLDER) {
+      rc = ps3_folder(opts, stem, res);
+    } else if (rc == RIP_OK && opts->split_fat32) {
+      rc = ps3_split(opts, stem, res);
+    }
   }
 
   snprintf(manifest_stem, sizeof(manifest_stem), "%s", stem);

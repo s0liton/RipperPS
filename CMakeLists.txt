@@ -15,11 +15,13 @@ endif()
 option(RIPPER_WERROR "Treat warnings as errors" ON)
 
 add_library(ripper_core STATIC
+  src/core/aacs.c
   src/core/aes.c
   src/core/audio_out.c
   src/core/cd_ecc.c
   src/core/cdrom.c
   src/core/chd.c
+  src/core/ciso.c
   src/core/config.c
   src/core/css.c
   src/core/cue.c
@@ -28,6 +30,7 @@ add_library(ripper_core STATIC
   src/core/drive.c
   src/core/dvd.c
   src/core/exfat.c
+  src/core/fpkg.c
   src/core/game.c
   src/core/hash.c
   src/core/image_drive.c
@@ -36,19 +39,24 @@ add_library(ripper_core STATIC
   src/core/log.c
   src/core/mmc.c
   src/core/omnidrive.c
+  src/core/pfs.c
   src/core/pkg.c
   src/core/ps3.c
   src/core/reader.c
   src/core/rip.c
   src/core/rip_cd.c
+  src/core/rsa.c
   src/core/remux.c
+  src/core/rvz.c
   src/core/sce_elf.c
   src/core/sfo.c
   src/core/transport.c
   src/core/udf.c
   src/core/ufs2.c
   src/core/util.c
+  src/core/wbfs.c
   src/core/xbox.c
+  src/core/xiso.c
   src/core/zip.c
 )
 target_include_directories(ripper_core PUBLIC include)
@@ -111,6 +119,7 @@ add_library(ripper_service STATIC
   src/service/deliver_nfs.c
   src/service/deliver_smb.c
   src/service/drivetest.c
+  src/service/langs.c
   src/service/disc_report.c
   src/service/drives.c
   src/service/gamedb.c
@@ -197,12 +206,21 @@ else()
     tests/test_firmware.c
     tests/test_formats.c
     tests/test_identify.c
+    tests/test_langs.c
+    tests/test_iso_extract.c
+    tests/test_game_images.c
+    tests/test_wbfs.c
+    tests/test_rvz.c
+    tests/test_aacs.c
+    tests/test_fpkg.c
+    src/service/langs.c
+    third_party/cJSON.c
     tests/udf_builder.c
     tests/iso_builder.c
     tests/test_main.c
     tests/test_rip.c
   )
-  target_include_directories(ripper-tests PRIVATE tests)
+  target_include_directories(ripper-tests PRIVATE tests src/service third_party)
   target_link_libraries(ripper-tests PRIVATE ripper_core)
   target_compile_options(ripper-tests PRIVATE -Wall -Wextra)
   add_test(NAME ripper-tests COMMAND ripper-tests WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})

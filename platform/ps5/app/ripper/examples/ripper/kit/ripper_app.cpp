@@ -465,7 +465,7 @@ Drive parse_drive(const cJSON *o) {
   d.revision = plain(str(o, "revision"));
   d.reads = str(o, "reads");
   d.state = str(o, "state");
-  d.message = plain(str(o, "message"));
+  d.message = sentence(plain(str(o, "message")));
   d.disc_seq = static_cast<int>(num(o, "disc_seq"));
   d.job = static_cast<int>(num(o, "job"));
   if (const cJSON *in = cJSON_GetObjectItemCaseSensitive(o, "install"); cJSON_IsObject(in)) {
@@ -499,7 +499,7 @@ Drive parse_drive(const cJSON *o) {
     d.group = str(offer, "group");
     const cJSON *f;
     cJSON_ArrayForEach(f, cJSON_GetObjectItemCaseSensitive(offer, "formats")) d.formats.push_back(
-        {str(f, "id"), plain(str(f, "label")), str(f, "availability"), plain(str(f, "reason")), flag(f, "available")});
+        {str(f, "id"), plain(str(f, "label")), str(f, "availability"), sentence(plain(str(f, "reason"))), flag(f, "available")});
     const cJSON *s = cJSON_GetObjectItemCaseSensitive(offer, "suggestion");
     d.suggestion.format = str(s, "format");
     d.suggestion.destination = str(s, "destination");
@@ -531,8 +531,8 @@ Job parse_job(const cJSON *o) {
   j.drive = str(o, "drive");
   j.drive_label = plain(str(o, "drive_label"));
   j.where = plain(str(o, "where"));
-  j.error = plain(str(o, "error"));
-  j.note = plain(str(o, "note"));
+  j.error = sentence(plain(str(o, "error")));
+  j.note = sentence(plain(str(o, "note")));
   j.done = num(o, "done");
   j.total = num(o, "total");
   j.rate = num(o, "rate");
@@ -602,9 +602,14 @@ Settings parse_settings(const cJSON *j) {
   s.notify = flag(j, "notify");
   s.auto_eject = flag(j, "auto_eject");
   s.auto_start = flag(j, "auto_start");
-  s.keep_front = !cJSON_IsFalse(cJSON_GetObjectItemCaseSensitive(j, "keep_front"));
   s.tmdb_key_set = flag(j, "tmdb_key_set");
   s.read_retries = static_cast<int>(num(j, "read_retries", 3));
+  const cJSON *k;
+  cJSON_ArrayForEach(k, cJSON_GetObjectItemCaseSensitive(j, "key_files")) {
+    KeyFile f{str(k, "id"), str(k, "label"), str(k, "path"), str(k, "default"), flag(k, "found"),
+              static_cast<int>(num(k, "count", 0))};
+    s.key_files.push_back(f);
+  }
   const cJSON *d;
   cJSON_ArrayForEach(d, cJSON_GetObjectItemCaseSensitive(j, "destinations")) {
     Destination dest{str(d, "id"), str(d, "type"), plain(str(d, "name")), "", {}, {}};
@@ -681,6 +686,12 @@ std::string json_string(const std::string &s) {
   std::string out = text ? text : "\"\"";
   cJSON_free(text);
   return out;
+}
+
+std::string sentence(std::string text) {
+  if (!text.empty())
+    text[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(text[0])));
+  return text;
 }
 
 std::string human_size(double bytes) {
@@ -793,12 +804,12 @@ void App::say(const std::string &message) {
     api_.post("/api/notify", "{\"message\":" + json_string(text) + "}", [this, message](const Response &r) {
       if (r.ok())
         return;
-      toast_ = plain(message.c_str());  // it just stopped
+      toast_ = sentence(plain(message.c_str()));  // it just stopped
       toast_age_ = 0;
     });
     return;
   }
-  toast_ = plain(message.c_str());
+  toast_ = sentence(plain(message.c_str()));
   toast_age_ = 0;
 }
 
@@ -1009,7 +1020,7 @@ void App::refresh_status() {
       }
     }
     if (!r.ok()) {
-      status_.error = plain(r.message().c_str());
+      status_.error = sentence(plain(r.message().c_str()));
       return;
     }
     Json j = parse(r);
@@ -1131,7 +1142,7 @@ void App::refresh_pairing() {
     if (!r.ok() || !j)
       return;
     pairing_.status = str(j.get(), "status");
-    pairing_.message = plain(str(j.get(), "message"));
+    pairing_.message = sentence(plain(str(j.get(), "message")));
     if (pairing_.status == "pending") {
       pairing_.user_code = str(j.get(), "user_code");
       pairing_.verification_url = str(j.get(), "verification_url");
@@ -1230,6 +1241,14 @@ void App::set_settings(const std::string &fields, const std::function<void(Setti
   });
 }
 
+void App::set_key_file(const std::string &id, const std::string &path) {
+  api_.post("/api/settings", "{\"keys\":{" + json_string(id) + ":" + json_string(path) + "}}", [this](const Response &r) {
+    if (!r.ok())
+      say("Couldn't change the key file: " + r.message());
+    settings_.known = false;  // the payload's, with the new file's status
+  });
+}
+
 void App::save_destinations(const std::vector<Destination> &list, std::function<void(bool)> done) {
   cJSON *arr = cJSON_CreateArray();
   for (const Destination &d : list)
@@ -1252,6 +1271,7 @@ void App::test_destination(const Destination &d, std::function<void(bool, const 
     std::string what = j ? plain(str(j.get(), "message")) : "";
     if (what.empty())
       what = r.ok() ? (ok ? "Works" : "Doesn't work") : r.message();
+    what = sentence(what);
     done(ok, what);
   });
 }
@@ -1287,11 +1307,11 @@ void App::pair_start(const std::string &url, bool tls_verify) {
               Json j = parse(r);
               if (!r.ok() || !j) {
                 pairing_.status = "error";
-                pairing_.message = plain(r.message().c_str());
+                pairing_.message = sentence(plain(r.message().c_str()));
                 return;
               }
               pairing_.status = str(j.get(), "status");
-              pairing_.message = plain(str(j.get(), "message"));
+              pairing_.message = sentence(plain(str(j.get(), "message")));
               pairing_.user_code = str(j.get(), "user_code");
               pairing_.verification_url = str(j.get(), "verification_url");
               pair_timer_ = 0;
@@ -1353,10 +1373,10 @@ void App::refresh_drive_test() {
     t.drive_label = plain(str(j.get(), "drive_label"));
     t.drive_name = plain(str(j.get(), "drive_name"));
     t.firmware = plain(str(j.get(), "firmware"));
-    t.prompt = plain(str(j.get(), "prompt"));
+    t.prompt = sentence(plain(str(j.get(), "prompt")));
     t.step = plain(str(j.get(), "step"));
     t.file = str(j.get(), "file");
-    t.error = plain(str(j.get(), "error"));
+    t.error = sentence(plain(str(j.get(), "error")));
     t.done = num(j.get(), "done");
     t.total = num(j.get(), "total");
     const cJSON *d = nullptr;
@@ -1407,10 +1427,6 @@ void App::label_test_disc(int n, const std::string &said) {
               if (!r.ok())
                 say("Couldn't save that: " + r.message());
             });
-}
-
-void App::keep_awake(int minutes) {
-  api_.post("/api/keep-awake", "{\"minutes\":" + std::to_string(minutes) + "}", [](const Response &) {});
 }
 
 }  // namespace ripper

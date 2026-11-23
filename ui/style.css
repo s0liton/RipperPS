@@ -15,6 +15,7 @@ section { display: none; } section.active { display: block; }
 .card { background: var(--surface); border: var(--hairline); border-radius: var(--radius-card); box-shadow: var(--shadow); padding: 18px 20px; margin-bottom: 16px; -webkit-backdrop-filter: var(--glass); backdrop-filter: var(--glass); }
 .card h2 { margin: 0 0 12px; font-size: 20px; }
 .card h3 { margin: 20px 0 8px; font-size: 17px; }
+.card h4 { margin: 16px 0 6px; font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
 .grid { display: grid; grid-gap: 14px; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
 .stats { display: grid; grid-gap: 12px; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
 .stat { background: var(--surface-raised); border-radius: var(--radius);  padding: 12px 14px; }

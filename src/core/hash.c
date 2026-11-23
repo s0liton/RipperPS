@@ -333,6 +333,12 @@ void rip_sha256_update(struct rip_sha256 *c, const void *data, size_t len) {
   c->len += len;
   while (len) {
     size_t take = 64 - c->used;
+    if (c->used == 0 && len >= 64) {
+      sha256_block(c, p);
+      p += 64;
+      len -= 64;
+      continue;
+    }
     if (take > len) {
       take = len;
     }
@@ -368,4 +374,50 @@ void rip_sha256_final(struct rip_sha256 *c, uint8_t out[32]) {
     out[4 * i + 2] = (uint8_t)(c->h[i] >> 8);
     out[4 * i + 3] = (uint8_t)c->h[i];
   }
+}
+
+void rip_hmac_sha256_init(struct rip_hmac_sha256 *ctx, const void *key, size_t key_len) {
+  uint8_t k[64];
+  uint8_t pad[64];
+  int i;
+
+  memset(k, 0, sizeof(k));
+  if (key_len > sizeof(k)) {
+    struct rip_sha256 h;
+    rip_sha256_init(&h);
+    rip_sha256_update(&h, key, key_len);
+    rip_sha256_final(&h, k);
+  } else {
+    memcpy(k, key, key_len);
+  }
+  for (i = 0; i < 64; i++) {
+    pad[i] = k[i] ^ 0x36;
+  }
+  rip_sha256_init(&ctx->inner);
+  rip_sha256_update(&ctx->inner, pad, sizeof(pad));
+  for (i = 0; i < 64; i++) {
+    pad[i] = k[i] ^ 0x5c;
+  }
+  rip_sha256_init(&ctx->outer);
+  rip_sha256_update(&ctx->outer, pad, sizeof(pad));
+}
+
+void rip_hmac_sha256_update(struct rip_hmac_sha256 *ctx, const void *data, size_t len) {
+  rip_sha256_update(&ctx->inner, data, len);
+}
+
+void rip_hmac_sha256_final(struct rip_hmac_sha256 *ctx, uint8_t out[32]) {
+  uint8_t inner[32];
+
+  rip_sha256_final(&ctx->inner, inner);
+  rip_sha256_update(&ctx->outer, inner, sizeof(inner));
+  rip_sha256_final(&ctx->outer, out);
+}
+
+void rip_hmac_sha256(const void *key, size_t key_len, const void *data, size_t len, uint8_t out[32]) {
+  struct rip_hmac_sha256 ctx;
+
+  rip_hmac_sha256_init(&ctx, key, key_len);
+  rip_hmac_sha256_update(&ctx, data, len);
+  rip_hmac_sha256_final(&ctx, out);
 }

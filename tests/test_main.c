@@ -322,10 +322,26 @@ int main(void) {
     const char *name;
     void (*fn)(void);
   } tests[] = {
-      {"aes", test_aes},         {"hashes", test_hashes},         {"system_cnf", test_system_cnf},
-      {"names", test_names},     {"sha256", test_sha256},         {"sfo", test_sfo},
-      {"iso9660", test_iso9660}, {"ps3_layout", test_ps3_layout}, {"rip", test_rip_all},
-      {"formats", test_formats}, {"firmware", test_firmware},   {"identify", test_identify},
+      {"aes", test_aes},
+      {"hashes", test_hashes},
+      {"system_cnf", test_system_cnf},
+      {"names", test_names},
+      {"sha256", test_sha256},
+      {"sfo", test_sfo},
+      {"iso9660", test_iso9660},
+      {"ps3_layout", test_ps3_layout},
+      {"rip", test_rip_all},
+      {"formats", test_formats},
+      {"firmware", test_firmware},
+      {"identify", test_identify},
+      {"langs", test_langs},
+      {"iso_extract", test_iso_extract},
+      {"split", test_split},
+      {"game_images", test_game_images},
+      {"wbfs", test_wbfs},
+      {"rvz", test_rvz},
+      {"aacs", test_aacs},
+      {"fpkg", test_fpkg},
   };
   size_t i;
 

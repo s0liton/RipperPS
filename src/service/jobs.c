@@ -1,5 +1,6 @@
 #include "jobs.h"
 
+#include <ctype.h>
 #include <pthread.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -15,6 +16,7 @@
 #include "platform.h"
 #include "ripper/common.h"
 #include "ripper/exfat.h"
+#include "ripper/fpkg.h"
 #include "ripper/game.h"
 #include "ripper/keydb.h"
 #include "ripper/log.h"
@@ -60,7 +62,7 @@ struct job {
   int64_t started;
   int64_t finished;
   char error[256];
-  char note[256];  // done, but with something to know: sectors that couldn't be read
+  char note[512];  // done, but with something to know: sectors that couldn't be read
   char where[512];
   char dir[SVC_PATH];
   char files[4][256];
@@ -188,14 +190,17 @@ static void *awake_thread(void *arg) {
 // Caller holds the lock.
 static int progress_line(const struct job *j, char *out, size_t n) {
   int sending = j->state == JOB_DELIVERING;
-  char pct[24];
+  char pct[48];
   char speed[32] = "";
   char left[48];
 
+  // A dump's steps (copying, decrypting, packing...) are named; a disc is reading.
+  const char *step = sending ? "sending" : strcmp(j->phase, "reading") != 0 ? j->phase : "";
+
   if (j->total) {
-    snprintf(pct, sizeof(pct), "%s%d%%", sending ? "sending " : "", (int)(100.0 * (double)j->done / (double)j->total));
+    snprintf(pct, sizeof(pct), "%s%s%d%%", step, step[0] ? " " : "", (int)(100.0 * (double)j->done / (double)j->total));
   } else {
-    snprintf(pct, sizeof(pct), "%s", sending ? "sending" : "starting");
+    snprintf(pct, sizeof(pct), "%s", step[0] ? step : "starting");
   }
   if (j->rate > 1) {
     snprintf(speed, sizeof(speed), " · %.1f MB/s", j->rate / 1e6);
@@ -240,9 +245,9 @@ static int progress_text(char *title, size_t tn, char *body, size_t bn) {
 
 // While RipperPS isn't in front (or isn't running), what's ripping is told in
 // a notification: once it's been away a few seconds (not for a quick look at
-// the home screen), then every few minutes.
+// the home screen), then often enough that it's plain the work goes on.
 #define PROGRESS_AWAY_S 10
-#define PROGRESS_EVERY_S 300
+#define PROGRESS_EVERY_S 45
 
 static void *progress_thread(void *arg) {
   int64_t away_since = 0;  // 0 while RipperPS is in front
@@ -479,10 +484,28 @@ static void *deliver_thread(void *arg) {
   return NULL;
 }
 
+// A dump takes the screen: the game is started and has to stay open. Each
+// step that matters is told, so it isn't closed or taken for stuck.
 static int dump_progress(void *ud, const char *phase, uint64_t done, uint64_t total) {
   struct job *j = ud;
+  char was[sizeof(j->phase)];
+  char title[300];
 
+  pthread_mutex_lock(&g_lock);
+  svc_str_copy(was, sizeof(was), j->phase);
+  pthread_mutex_unlock(&g_lock);
   set_phase(j, phase, done, total);
+  if (settings_notify() && strcmp(was, phase) != 0) {
+    if (!strcmp(phase, "starting the game")) {
+      snprintf(title, sizeof(title), "Starting %s", j->name);
+      plat_notify(title,
+                  "RipperPS is opening the game to dump it. Don't close it or start another game until RipperPS says "
+                  "it's done.");
+    } else if (!strcmp(phase, "copying")) {
+      snprintf(title, sizeof(title), "Dumping %s", j->name);
+      plat_notify(title, "This takes a while. Keep the game open, and you'll get a notification when it's done.");
+    }
+  }
   return j->cancel;
 }
 
@@ -504,7 +527,8 @@ static int finish_progress(void *ud, unsigned done, unsigned total) {
 // it's let go at once. The game comes out as a folder named like the rip.
 static void game_dump(struct job *j, const char *title_id) {
   char out[SVC_PATH];
-  char err[256] = "";
+  char err[512] = "";
+  struct fpkg_keys *pkg_keys = NULL;
   int rc;
 
   if (!title_id[0]) {
@@ -516,17 +540,66 @@ static void game_dump(struct job *j, const char *title_id) {
     return;
   }
   svc_path_join(out, sizeof(out), j->dir, j->name);
-  rc = plat_game_dump(title_id, out, dump_progress, j, &j->cancel, err, sizeof(err));
+  if (!strcmp(catalog_game_container(j->options), "pkg") && strncmp(title_id, "CUSA", 4) != 0) {
+    finish(j, JOB_FAILED, "a fake PKG is for PS4 games");
+    return;
+  }
+  if (!strcmp(catalog_game_container(j->options), "pkg")) {
+    // The user's keys, before the dump: a package can't be made without them.
+    char path[SVC_PATH];
+    char why[256] = "";
+    settings_key_file("ps4", path, sizeof(path));
+    pkg_keys = malloc(sizeof(*pkg_keys));
+    if (!pkg_keys || fpkg_keys_load(path, pkg_keys, why, sizeof(why)) != RIP_OK) {
+      snprintf(err, sizeof(err), "a fake PKG needs the PS4 package keys: %s. Add them in Settings, under Keys",
+               why[0] ? why : "the key file can't be read");
+      free(pkg_keys);
+      finish(j, JOB_FAILED, err);
+      return;
+    }
+  }
+  {
+    const cJSON *c = cJSON_GetObjectItemCaseSensitive(j->options, "complete");
+    const int complete = cJSON_IsTrue(c) || (cJSON_IsString(c) && !strcmp(c->valuestring, "1"));
+    const unsigned copies = strcmp(catalog_game_container(j->options), "folder") != 0 ? 2 : 1;
+    rc = plat_game_dump(title_id, out, complete, copies, dump_progress, j, &j->cancel, err, sizeof(err));
+  }
+  if (rc == RIP_OK && err[0]) {
+    svc_str_copy(j->note, sizeof(j->note), err);  // the languages left out
+    err[0] = '\0';
+  }
   if (rc == RIP_OK) {
     // Ready for where it runs: fake-signed and backported if asked.
     struct game_finish fin;
     catalog_game_finish(!strncmp(title_id, "PPSA", 4) ? "ps5" : "ps4", j->options, &fin);
+    if (pkg_keys) {
+      fin.target = SCE_TARGET_PS4;  // what fake PKGs carry, and the HENs run on either console
+    }
     rc = game_finish_folder(out, &fin, finish_progress, j, NULL);
     if (rc == RIP_ERR) {
       snprintf(err, sizeof(err), "the dump is done, but its executables couldn't be fake-signed");
     }
   }
-  if (rc == RIP_OK && strcmp(catalog_game_container(j->options), "folder") != 0) {
+  if (rc == RIP_OK && pkg_keys) {
+    // A fake PKG for GoldHEN and etaHEN: built from the folder, which then goes.
+    char pkg[SVC_PATH + 8];
+    char why[256] = "";
+    snprintf(pkg, sizeof(pkg), "%s.pkg", out);
+    rc = fpkg_from_folder(out, pkg, pkg_keys, pack_progress, j, why, sizeof(why));
+    if (rc == RIP_OK) {
+      svc_remove_tree(out);
+      pthread_mutex_lock(&g_lock);
+      svc_str_copy(j->format_label, sizeof(j->format_label), "Fake PKG");
+      j->file_count = 1;
+      snprintf(j->files[0], sizeof(j->files[0]), "%.240s.pkg", j->name);
+      pthread_mutex_unlock(&g_lock);
+      svc_str_copy(out, sizeof(out), pkg);
+    } else if (rc != RIP_ECANCEL) {
+      unlink(pkg);
+      snprintf(err, sizeof(err), "the dump is done, but the package couldn't be made: %s",
+               why[0] ? why : "the log has the details");
+    }
+  } else if (rc == RIP_OK && strcmp(catalog_game_container(j->options), "folder") != 0) {
     // The folder becomes an image, the game at its root, and goes.
     const char *kind = catalog_game_container(j->options);
     int ufs = !strcmp(kind, "ffpkg");
@@ -538,6 +611,7 @@ static void game_dump(struct job *j, const char *title_id) {
     if (rc == RIP_OK) {
       svc_remove_tree(out);
       pthread_mutex_lock(&g_lock);
+      svc_str_copy(j->format_label, sizeof(j->format_label), ufs ? "UFS2 image" : "exFAT image");
       j->file_count = 1;
       snprintf(j->files[0], sizeof(j->files[0]), "%.240s.%s", j->name, kind);
       pthread_mutex_unlock(&g_lock);
@@ -547,6 +621,7 @@ static void game_dump(struct job *j, const char *title_id) {
       snprintf(err, sizeof(err), "the dump is done, but the %s image couldn't be made", ufs ? "UFS2" : "exFAT");
     }
   }
+  free(pkg_keys);
   if (rc != RIP_OK) {
     if (j->staged || rc == RIP_ECANCEL) {
       svc_remove_tree(out);
@@ -558,6 +633,14 @@ static void game_dump(struct job *j, const char *title_id) {
   if (!j->file_count) {
     j->file_count = 1;
     svc_str_copy(j->files[0], sizeof(j->files[0]), j->name);
+  }
+  {
+    // The game's DLC, dumped beside it (plat_game_dump()).
+    char dlc[SVC_PATH + 220];
+    snprintf(dlc, sizeof(dlc), "%s/%.200s (DLC)", j->dir, j->name);
+    if (svc_dir_exists(dlc) && j->file_count < 4) {
+      snprintf(j->files[j->file_count++], sizeof(j->files[0]), "%.200s (DLC)", j->name);
+    }
   }
   j->ripped = 1;
   pthread_mutex_unlock(&g_lock);
@@ -585,7 +668,7 @@ static void *installed_thread(void *arg) {
   pthread_mutex_lock(&g_lock);
   svc_str_copy(j->system, sizeof(j->system), sys->id);
   svc_str_copy(j->system_name, sizeof(j->system_name), sys->name);
-  svc_str_copy(j->format_label, sizeof(j->format_label), "Decrypted game folder");
+  svc_str_copy(j->format_label, sizeof(j->format_label), "Game folder");
   svc_str_copy(j->drive_label, sizeof(j->drive_label), "Installed game");
   svc_template(j->folder, sizeof(j->folder), tpl, vars);
   pthread_mutex_unlock(&g_lock);
@@ -643,6 +726,8 @@ static void *job_thread(void *arg) {
   struct drive_claim claim;
   struct rip_reader reader;
   struct rip_keydb keys;
+  size_t key_count = 0;
+  char keydb_path[SVC_PATH];
   struct rip_job_opts opts;
   struct rip_job_result *res = calloc(1, sizeof(*res));
   struct rip_audio_meta *meta = NULL;
@@ -688,7 +773,7 @@ static void *job_thread(void *arg) {
       set_phase(j, "looking up", 0, 0);
       meta = calloc(1, sizeof(*meta));
       if (meta && mb_lookup(claim.disc.musicbrainz_id, meta, err, sizeof(err)) != RIP_OK) {
-        RIP_WARN("%s; the tracks keep plain names", err);
+        RIP_WARN("%s, so the tracks keep plain names", err);
         free(meta);
         meta = NULL;
       }
@@ -757,11 +842,13 @@ static void *job_thread(void *arg) {
     drives_claim_free(&claim);
     return NULL;
   }
-  settings_ps3_keys(keys_path, sizeof(keys_path));
+  settings_key_file("ps3", keys_path, sizeof(keys_path));
   if (recipe->id == RIP_RECIPE_PS3_ISO && rip_keydb_load(&keys, keys_path) != RIP_OK) {
-    RIP_WARN("no PS3 key file at %s; the image will stay encrypted", keys_path);
+    RIP_WARN("no PS3 key file at %s, so the image will stay encrypted", keys_path);
   }
   memset(&opts, 0, sizeof(opts));
+  settings_key_file("bluray", keydb_path, sizeof(keydb_path));
+  opts.aacs_keydb = keydb_path;
   opts.out_dir = j->dir;
   opts.name = j->name;
   opts.ps3_keys = keys.count ? &keys : NULL;
@@ -786,6 +873,7 @@ static void *job_thread(void *arg) {
     rip_reader_close(&reader);
   }
   pthread_mutex_unlock(claim.io);
+  key_count = keys.count;
   rip_keydb_free(&keys);
   free(meta);
   meta = NULL;
@@ -797,7 +885,11 @@ static void *job_thread(void *arg) {
       svc_remove_tree(j->dir);
     }
     finish(j, rc == RIP_ECANCEL ? JOB_CANCELLED : JOB_FAILED,
-           rc == RIP_ECANCEL ? "cancelled" : "the rip failed; the log has the details");
+           rc == RIP_ECANCEL ? "cancelled"
+           : recipe->id == RIP_RECIPE_FOLDER && res->hashes.size && !res->ps3_key_found
+               ? "a game folder needs the disc decrypted, and there's no key for it. Add the key file in Settings, "
+                 "under Keys, or rip it as an ISO"
+               : "the rip failed (the log has the details)");
     free(res);
     return NULL;
   }
@@ -819,6 +911,17 @@ static void *job_thread(void *arg) {
   if (res->unreadable) {
     snprintf(j->note, sizeof(j->note), "%llu sector%s couldn't be read and %s zeros in the image (a scratched disc?)",
              (unsigned long long)res->unreadable, res->unreadable == 1 ? "" : "s", res->unreadable == 1 ? "is" : "are");
+  } else if (res->aacs == 2) {
+    char why[200];
+    svc_str_copy(why, sizeof(why), res->aacs_why[0] ? res->aacs_why : "there's no key for this disc");
+    why[0] = (char)toupper((unsigned char)why[0]);
+    snprintf(j->note, sizeof(j->note),
+             "%s, so the movie is still encrypted. Add it in Settings, under Keys, and rip again.", why);
+  } else if (recipe->id == RIP_RECIPE_PS3_ISO && !res->decrypted) {
+    // Done, but not what was asked for: RPCS3 and webMAN want it decrypted.
+    snprintf(j->note, sizeof(j->note),
+             "%s, so the ISO is still encrypted. Add it in Settings, under Keys, and rip again.",
+             key_count ? "The key file has no key for this disc" : "There's no PS3 key file");
   }
   j->ripped = 1;
   pthread_mutex_unlock(&g_lock);

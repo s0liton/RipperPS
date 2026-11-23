@@ -11,7 +11,35 @@
 #include "ripper/util.h"
 
 int deliver_is_local(const cJSON *dest) {
-  return !strcmp(jstr(dest, "type", ""), "local");
+  const char *type = jstr(dest, "type", "");
+  return !strcmp(type, "local") || !strcmp(type, "usb");
+}
+
+// A USB drive's folder is only there while the drive is: without this, its
+// folder would be made on the console under /mnt instead.
+static int usb_missing(const cJSON *dest, char *msg, size_t n) {
+  const char *path = jstr(dest, "path", "");
+  char root[16];
+  size_t l = 0;
+
+  if (strcmp(jstr(dest, "type", ""), "usb") != 0) {
+    return 0;
+  }
+  if (!strncmp(path, "/mnt/usb", 8)) {
+    for (l = 8; path[l] >= '0' && path[l] <= '9' && l < sizeof(root) - 1; l++) {
+    }
+  }
+  if (l <= 8 || (path[l] != '/' && path[l] != '\0')) {
+    snprintf(msg, n, "pick a folder on a USB drive");
+    return 1;
+  }
+  memcpy(root, path, l);
+  root[l] = '\0';
+  if (!svc_is_mount(root)) {
+    snprintf(msg, n, "the USB drive (%s) isn't plugged in", root);
+    return 1;
+  }
+  return 0;
 }
 
 static int local_test(const cJSON *dest, char *msg, size_t n) {
@@ -22,6 +50,9 @@ static int local_test(const cJSON *dest, char *msg, size_t n) {
 
   if (path[0] != '/') {
     snprintf(msg, n, "the folder must be a full path");
+    return RIP_ERR;
+  }
+  if (usb_missing(dest, msg, n)) {
     return RIP_ERR;
   }
   if (rip_mkdir_p(path) != 0) {
@@ -153,6 +184,9 @@ static int deliver_local(const struct deliver_req *r, char *where, size_t wn, ch
   char dir[SVC_PATH];
   int i;
 
+  if (usb_missing(r->dest, err, en)) {
+    return RIP_ERR;
+  }
   svc_path_join(dir, sizeof(dir), jstr(r->dest, "path", ""), r->folder ? r->folder : "");
   if (rip_mkdir_p(dir) != 0) {
     snprintf(err, en, "can't create %s", dir);
@@ -189,7 +223,7 @@ int deliver_test(const cJSON *dest, char *msg, size_t n) {
   const char *type = jstr(dest, "type", "");
 
   msg[0] = '\0';
-  if (!strcmp(type, "local")) {
+  if (deliver_is_local(dest)) {
     return local_test(dest, msg, n);
   }
   if (!strcmp(type, "ftp")) {
@@ -213,7 +247,7 @@ int deliver_run(const struct deliver_req *r, char *where, size_t wn, char *err, 
 
   where[0] = '\0';
   err[0] = '\0';
-  if (!strcmp(type, "local")) {
+  if (deliver_is_local(r->dest)) {
     return deliver_local(r, where, wn, err, en);
   }
   if (!strcmp(type, "ftp")) {

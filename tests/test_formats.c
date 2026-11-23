@@ -7,27 +7,27 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "../src/core/ufs2_layout.h"
+#include "ripper/audio_out.h"
 #include "ripper/cdrom.h"
 #include "ripper/chd.h"
 #include "ripper/common.h"
 #include "ripper/cue.h"
 #include "ripper/disc.h"
-#include "ripper/mmc.h"
-#include "ripper/pkg.h"
+#include "ripper/drive.h"
 #include "ripper/exfat.h"
 #include "ripper/hash.h"
-#include "ripper/sce_elf.h"
+#include "ripper/image_drive.h"
+#include "ripper/mmc.h"
+#include "ripper/pkg.h"
 #include "ripper/reader.h"
 #include "ripper/rip.h"
-#include "ripper/drive.h"
-#include "ripper/image_drive.h"
+#include "ripper/sce_elf.h"
 #include "ripper/udf.h"
-#include "ripper/audio_out.h"
 #include "ripper/ufs2.h"
 #include "ripper/util.h"
 #include "test.h"
 #include "udf_builder.h"
-#include "../src/core/ufs2_layout.h"
 
 static void fill_random(uint8_t *p, size_t n, uint32_t seed) {
   size_t i;
@@ -152,7 +152,7 @@ static void test_cue_and_drive(const char *dir) {
   CHECK_MEM(frame, data + 5 * CD_FRAME, CD_FRAME);
   CHECK(cd_read_q(&t, DATA_FRAMES + 10, q) == RIP_OK);
   CHECK(cd_unbcd(q[1]) == 2 && cd_unbcd(q[2]) == 0);  // track 2, index 0
-  toc.tracks[1].pregap = 0;                            // forget it, then find it again
+  toc.tracks[1].pregap = 0;                           // forget it, then find it again
   cd_find_pregaps(&t, &toc);
   CHECK(toc.tracks[1].pregap == AUDIO_PREGAP);
   CHECK(toc.tracks[0].length == DATA_FRAMES);
@@ -230,8 +230,9 @@ static void test_cd_rip(const char *dir) {
     free(back);
     snprintf(path, sizeof(path), "%s/Ripped/Ripped.cue", out);
     back = test_read_file(path, &len);
-    CHECK(back && strstr((char *)back, "FILE \"Ripped (Track 2).bin\" BINARY\r\n  TRACK 02 AUDIO\r\n    INDEX 00 00:00:00\r\n"
-                                       "    INDEX 01 00:02:00") != NULL);
+    CHECK(back && strstr((char *)back,
+                         "FILE \"Ripped (Track 2).bin\" BINARY\r\n  TRACK 02 AUDIO\r\n    INDEX 00 00:00:00\r\n"
+                         "    INDEX 01 00:02:00") != NULL);
     free(back);
     CHECK(res.manifest_path[0] && rip_file_exists(res.manifest_path));
   }
@@ -339,7 +340,8 @@ static void test_audio_rip(const char *dir) {
       const char *name;
       size_t from;
       size_t frames;
-    } files[3] = {{"01 - Track 01.wav", 0, T1 + GAP}, {"02 - Second - Song.wav", T1 + GAP, T2},
+    } files[3] = {{"01 - Track 01.wav", 0, T1 + GAP},
+                  {"02 - Second - Song.wav", T1 + GAP, T2},
                   {"03 - Track 03.wav", T1 + GAP + T2, T3}};
     CHECK(rip_run(audio, &drive, &reader, &disc, &opts, &res) == RIP_OK);
     for (i = 0; i < 3; i++) {
@@ -352,10 +354,11 @@ static void test_audio_rip(const char *dir) {
     snprintf(path, sizeof(path), "%s/Some Album/Some Album.cue", out);
     back = test_read_file(path, &len);
     CHECK(back && strstr((char *)back, "PERFORMER \"Some Band\"\r\nTITLE \"Some 'Album'\"\r\n") != NULL);
-    CHECK(back && strstr((char *)back, "FILE \"01 - Track 01.wav\" WAVE\r\n  TRACK 01 AUDIO\r\n    INDEX 01 00:00:00\r\n"
-                                       "  TRACK 02 AUDIO\r\n    TITLE \"Second: Song\"\r\n    INDEX 00 00:13:25\r\n"
-                                       "FILE \"02 - Second - Song.wav\" WAVE\r\n    INDEX 01 00:00:00\r\n"
-                                       "FILE \"03 - Track 03.wav\" WAVE\r\n  TRACK 03 AUDIO\r\n    INDEX 01 00:00:00\r\n") != NULL);
+    CHECK(back && strstr((char *)back,
+                         "FILE \"01 - Track 01.wav\" WAVE\r\n  TRACK 01 AUDIO\r\n    INDEX 01 00:00:00\r\n"
+                         "  TRACK 02 AUDIO\r\n    TITLE \"Second: Song\"\r\n    INDEX 00 00:13:25\r\n"
+                         "FILE \"02 - Second - Song.wav\" WAVE\r\n    INDEX 01 00:00:00\r\n"
+                         "FILE \"03 - Track 03.wav\" WAVE\r\n  TRACK 03 AUDIO\r\n    INDEX 01 00:00:00\r\n") != NULL);
     free(back);
 
     // One file for the disc.
@@ -368,8 +371,9 @@ static void test_audio_rip(const char *dir) {
     free(back);
     snprintf(path, sizeof(path), "%s/Some Album/Some Album.cue", out);
     back = test_read_file(path, &len);
-    CHECK(back && strstr((char *)back, "  TRACK 02 AUDIO\r\n    TITLE \"Second: Song\"\r\n    INDEX 00 00:13:25\r\n"
-                                       "    INDEX 01 00:15:25\r\n") != NULL);
+    CHECK(back && strstr((char *)back,
+                         "  TRACK 02 AUDIO\r\n    TITLE \"Second: Song\"\r\n    INDEX 00 00:13:25\r\n"
+                         "    INDEX 01 00:15:25\r\n") != NULL);
     free(back);
     // A drive with a read offset (the SH-224DB's +6): every read is shifted,
     // a frame past the chunk. It ran past the end of the raw buffer once, which
@@ -431,7 +435,8 @@ static void test_chd_dvd(const char *dir) {
 static void test_chd_cd(const char *dir) {
   uint8_t *data = make_data_track();
   uint8_t *audio = make_audio_track();
-  struct chd_cd_track tracks[2] = {{CD_MODE1, DATA_FRAMES, 0}, {CD_MODE_AUDIO, AUDIO_PREGAP + AUDIO_FRAMES, AUDIO_PREGAP}};
+  struct chd_cd_track tracks[2] = {{CD_MODE1, DATA_FRAMES, 0},
+                                   {CD_MODE_AUDIO, AUDIO_PREGAP + AUDIO_FRAMES, AUDIO_PREGAP}};
   struct chd_writer *w;
   char chd[600];
   char cue[600];
@@ -459,7 +464,8 @@ static void test_chd_cd(const char *dir) {
     CHECK(back && len == (size_t)(DATA_FRAMES + AUDIO_PREGAP + AUDIO_FRAMES) * CD_FRAME);
     if (back && len == (size_t)(DATA_FRAMES + AUDIO_PREGAP + AUDIO_FRAMES) * CD_FRAME) {
       CHECK(memcmp(back, data, (size_t)DATA_FRAMES * CD_FRAME) == 0);
-      CHECK(memcmp(back + (size_t)DATA_FRAMES * CD_FRAME, audio, (size_t)(AUDIO_PREGAP + AUDIO_FRAMES) * CD_FRAME) == 0);
+      CHECK(memcmp(back + (size_t)DATA_FRAMES * CD_FRAME, audio, (size_t)(AUDIO_PREGAP + AUDIO_FRAMES) * CD_FRAME) ==
+            0);
     }
     free(back);
   }
@@ -536,8 +542,8 @@ static void test_udf(const char *dir) {
 }
 
 // Writes one .bin and a sheet for it; returns the sheet's path in cue.
-static void write_cd(const char *dir, const char *stem, const uint8_t *bin, size_t frames, const char *mode,
-                     char *cue, size_t cn) {
+static void write_cd(const char *dir, const char *stem, const uint8_t *bin, size_t frames, const char *mode, char *cue,
+                     size_t cn) {
   char path[600];
   char text[256];
 
@@ -608,10 +614,8 @@ static void test_pkg(const char *dir) {
     uint32_t id, name, flags, offset, size;
     const char *data;
   } ents[] = {
-      {0x0200, 0, 0, 0x1000, sizeof(names), NULL},
-      {0x1000, 1, 0, 0x1100, 8, "\0PSFsfo!"},
-      {0x1400, 11, 0, 0x1200, 4, "TROP"},
-      {0x0400, 31, 0x80000000u, 0x1300, 4, "KEYS"},
+      {0x0200, 0, 0, 0x1000, sizeof(names), NULL}, {0x1000, 1, 0, 0x1100, 8, "\0PSFsfo!"},
+      {0x1400, 11, 0, 0x1200, 4, "TROP"},          {0x0400, 31, 0x80000000u, 0x1300, 4, "KEYS"},
       {0x1006, 43, 0, 0x1400, 4, "EVIL"},
   };
   char path[700];
@@ -665,7 +669,10 @@ static size_t make_sce_elf(uint8_t *f, size_t cap) {
   size_t i;
 
   memset(f, 0, cap);
-  memcpy(f, "\x7F" "ELF\x02\x01\x01\x09", 8);
+  memcpy(f,
+         "\x7F"
+         "ELF\x02\x01\x01\x09",
+         8);
   rip_put_le16(f + 0x10, 0xFE10);
   rip_put_le16(f + 0x12, 0x3E);
   rip_put_le32(f + 0x20, 0x40);  // e_phoff
@@ -682,9 +689,9 @@ static size_t make_sce_elf(uint8_t *f, size_t cap) {
   }
   fill_random(f + 0x1000, 0x4800, 21);
   rip_put_le32(f + 0x6000, 0x40);
-  rip_put_le32(f + 0x6008, 0x4942524F);   // "ORBI"
-  rip_put_le32(f + 0x6010, 0x09008001);   // PS4 SDK 9.00
-  rip_put_le32(f + 0x6014, 0x04000031);   // PS5 SDK 4.xx
+  rip_put_le32(f + 0x6008, 0x4942524F);  // "ORBI"
+  rip_put_le32(f + 0x6010, 0x09008001);  // PS4 SDK 9.00
+  rip_put_le32(f + 0x6014, 0x04000031);  // PS5 SDK 4.xx
   memcpy(f + 0x7000, "version segment, thirty-two b..", 32);
   return 0x7020;
 }
@@ -726,6 +733,24 @@ static void test_sce_elf(const char *dir) {
   CHECK(sce_write_fself(in, out, SCE_TARGET_PS5) == RIP_OK);
   f = test_read_file(out, &flen);
   CHECK(f && rip_le32(f) == SCE_SELF_PS5_MAGIC);
+  {
+    // Made the PS4's: byte for byte what writing it for a PS4 gives.
+    uint8_t *ps4_made;
+    size_t ps4_len = 0;
+    char ps4_out[300];
+    snprintf(ps4_out, sizeof(ps4_out), "%s/eboot.ps4", dir);
+    CHECK(sce_write_fself(in, ps4_out, SCE_TARGET_PS4) == RIP_OK);
+    CHECK(sce_retarget_fself(out, SCE_TARGET_PS4) == 1);
+    CHECK(sce_retarget_fself(out, SCE_TARGET_PS4) == 0);
+    free(f);
+    f = test_read_file(out, &flen);
+    ps4_made = test_read_file(ps4_out, &ps4_len);
+    CHECK(f && ps4_made && flen == ps4_len && !memcmp(f, ps4_made, flen));
+    free(ps4_made);
+    unlink(ps4_out);
+    // A plain ELF isn't one.
+    CHECK(sce_retarget_fself(in, SCE_TARGET_PS4) == -1);
+  }
   free(f);
 
   // Backports: lowered when above the target, left alone when not.
@@ -741,7 +766,8 @@ static void test_sce_elf(const char *dir) {
   CHECK(f && rip_le32(f + 0x6014) == 0x02000009);
   free(f);
   {
-    const char json[] = "{\"requiredSystemSoftwareVersion\": \"0x0450000000000000\", \"sdkVersion\": \"0x0100000000000000\"}";
+    const char json[] =
+        "{\"requiredSystemSoftwareVersion\": \"0x0450000000000000\", \"sdkVersion\": \"0x0100000000000000\"}";
     snprintf(in, sizeof(in), "%s/param.json", dir);
     CHECK(write_file(in, (const uint8_t *)json, sizeof(json) - 1) == 0);
     CHECK(sce_backport_json(in, 0x02000009) == 1);

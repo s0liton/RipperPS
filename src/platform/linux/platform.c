@@ -193,9 +193,11 @@ int plat_game_list(struct plat_game *out, int max) {
   return 0;
 }
 
-int plat_game_dump(const char *title_id, const char *out_dir, plat_progress_fn progress, void *ud, volatile int *cancel,
-                   char *err, size_t en) {
+int plat_game_dump(const char *title_id, const char *out_dir, int complete, unsigned copies, plat_progress_fn progress,
+                   void *ud, volatile int *cancel, char *err, size_t en) {
   (void)title_id;
+  (void)complete;
+  (void)copies;
   (void)out_dir;
   (void)progress;
   (void)ud;

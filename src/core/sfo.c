@@ -65,3 +65,42 @@ int sfo_get_string(const uint8_t *sfo, size_t len, const char *key, char *out, s
   }
   return RIP_ENOENT;
 }
+
+int sfo_set_string(uint8_t *sfo, size_t len, const char *key, const char *value) {
+  uint32_t key_table;
+  uint32_t data_table;
+  uint32_t entries;
+  uint32_t i;
+  size_t vlen = strlen(value);
+
+  if (!sfo_valid(sfo, len)) {
+    return RIP_ERR;
+  }
+  key_table = rip_le32(sfo + 0x08);
+  data_table = rip_le32(sfo + 0x0C);
+  entries = rip_le32(sfo + 0x10);
+  for (i = 0; i < entries; i++) {
+    uint8_t *e = sfo + SFO_HEADER + (size_t)i * SFO_ENTRY;
+    size_t key_off = (size_t)key_table + rip_le16(e);
+    uint16_t fmt = rip_le16(e + 2);
+    uint32_t max_len = rip_le32(e + 8);
+    size_t data_off = (size_t)data_table + rip_le32(e + 12);
+    size_t key_len = strlen(key);
+
+    if (key_off + key_len + 1 > len || memcmp(sfo + key_off, key, key_len + 1) != 0) {
+      continue;
+    }
+    if ((fmt != SFO_FMT_UTF8 && fmt != SFO_FMT_UTF8_SPECIAL) || data_off + max_len > len || vlen + 1 > max_len) {
+      return RIP_ERR;
+    }
+    memset(sfo + data_off, 0, max_len);
+    memcpy(sfo + data_off, value, vlen);
+    // The used length: a UTF-8 string's counts its terminator.
+    e[4] = (uint8_t)(vlen + 1);
+    e[5] = (uint8_t)((vlen + 1) >> 8);
+    e[6] = 0;
+    e[7] = 0;
+    return RIP_OK;
+  }
+  return RIP_ENOENT;
+}

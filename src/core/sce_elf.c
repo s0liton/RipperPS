@@ -60,6 +60,28 @@ int sce_is_self(const char *path) {
   return read_magic(path, m) && (rip_le32(m) == SCE_SELF_PS4_MAGIC || rip_le32(m) == SCE_SELF_PS5_MAGIC);
 }
 
+int sce_retarget_fself(const char *path, enum sce_target target) {
+  uint8_t head[12];
+  uint8_t magic[4];
+  int fd = open(path, O_RDWR);
+  int rc = 0;
+
+  if (fd < 0) {
+    return -1;
+  }
+  if (rip_seek_read(fd, 0, head, sizeof(head)) != 0 ||
+      (rip_le32(head) != SCE_SELF_PS4_MAGIC && rip_le32(head) != SCE_SELF_PS5_MAGIC) || rip_le32(head + 8) != 0x101) {
+    rc = -1;  // not one of ours: left alone
+  } else if (rip_le32(head) != (target == SCE_TARGET_PS5 ? SCE_SELF_PS5_MAGIC : SCE_SELF_PS4_MAGIC)) {
+    rip_put_le32(magic, target == SCE_TARGET_PS5 ? SCE_SELF_PS5_MAGIC : SCE_SELF_PS4_MAGIC);
+    rc = rip_seek_write(fd, 0, magic, 4) == 0 ? 1 : -1;
+  }
+  if (close(fd) != 0) {
+    rc = -1;
+  }
+  return rc;
+}
+
 /* FSELF */
 
 struct seg {

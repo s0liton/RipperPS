@@ -106,7 +106,7 @@ static int omni_frames(struct fake_drive *d, const uint8_t *cdb, uint8_t *buf, s
   int key;
   uint32_t i;
 
-  if (!d->omnidrive || !d->image || !d->nintendo || (cdb[1] & 0x04) || bd != (d->nintendo == 2)) {
+  if (!d->omnidrive || !d->image || !d->nintendo || (cdb[1] & 0x04) || bd != (d->nintendo >= 2)) {
     return check(sense, 0x05, 0x24);
   }
   if ((uint64_t)(lba + count) * 2048 > d->image_len || count * frame > len) {
@@ -121,7 +121,7 @@ static int omni_frames(struct fake_drive *d, const uint8_t *cdb, uint8_t *buf, s
     if (bd) {
       memcpy(f, s, 2048);
       rip_put_be32(f + 2048, dvd_edc(f, 2048));
-      bd_descramble(f, (int32_t)(lba + i), 1);
+      bd_descramble(f, (int32_t)(lba + i), d->nintendo == 2);
     } else {
       f[1] = (uint8_t)(psn >> 16);
       f[2] = (uint8_t)(psn >> 8);
@@ -198,6 +198,17 @@ static int fake_exec(void *ctx, const uint8_t *cdb, size_t cdb_len, enum rip_dir
       return check(sense, 0x03, 0x11);
     }
     memcpy(buf, d->image + (size_t)lba * 2048, (size_t)count * 2048);
+    {
+      uint32_t i;
+      for (i = 0; i < count; i++) {
+        if (lba + i >= d->bus_from && lba + i < d->bus_to) {
+          size_t k;
+          for (k = 0; k < 2048; k++) {
+            ((uint8_t *)buf)[(size_t)i * 2048 + k] ^= (uint8_t)(0xA5 + k);
+          }
+        }
+      }
+    }
     return RIP_OK;
   }
   case 0xAD:

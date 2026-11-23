@@ -191,9 +191,130 @@ static void url_escape(const char *in, char *out, size_t n) {
   out[o] = '\0';
 }
 
+// Letters and digits only, lower case: "The Matrix" and "THE_MATRIX" alike.
+static void plain_key(const char *in, char *out, size_t n) {
+  size_t o = 0;
+
+  for (; *in && o + 1 < n; in++) {
+    if (isalnum((unsigned char)*in)) {
+      out[o++] = (char)tolower((unsigned char)*in);
+    }
+  }
+  out[o] = '\0';
+}
+
+// The first year in text ("2004 DreamWorks Animation film"): four digits on
+// their own, starting with 1 or 2. NULL if there's none.
+static const char *first_year(const char *text) {
+  const char *p;
+
+  for (p = text; *p; p++) {
+    size_t n = 0;
+    if (p > text && isdigit((unsigned char)p[-1])) {
+      continue;
+    }
+    while (isdigit((unsigned char)p[n])) {
+      n++;
+    }
+    if (n == 4 && (p[0] == '1' || p[0] == '2')) {
+      return p;
+    }
+  }
+  return NULL;
+}
+
+// The movie on English Wikipedia, for when there's no TMDB key: no account
+// needed. Its film articles say "1999 film by ..." in their description and
+// lead with the poster. Only an article whose title is the name we have
+// (less a " (1999 film)") is taken: a volume label that's not quite a title
+// finds nothing rather than the wrong movie.
+static void wikipedia(struct disc_details *d) {
+  char q[600];
+  char url[1200];
+  char want[256];
+  struct http_req req;
+  struct http_resp resp;
+  cJSON *j;
+  const cJSON *pages;
+  const cJSON *p;
+  const cJSON *best = NULL;
+  int best_index = 1 << 30;
+
+  {
+    char search[300];
+    snprintf(search, sizeof(search), "%.250s film", d->title);
+    url_escape(search, q, sizeof(q));
+  }
+  plain_key(d->title, want, sizeof(want));
+  if (!want[0]) {
+    return;
+  }
+  snprintf(url, sizeof(url),
+           "https://en.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&generator=search"
+           "&gsrsearch=%s&gsrlimit=8&prop=pageimages%%7Cdescription&piprop=thumbnail&pithumbsize=500&pilicense=any",
+           q);
+  memset(&req, 0, sizeof(req));
+  memset(&resp, 0, sizeof(resp));
+  req.method = "GET";
+  req.url = url;
+  req.tls_verify = 1;
+  req.timeout_s = 20;
+  if (http_do(&req, &resp) != RIP_OK || resp.status != 200) {
+    RIP_INFO("details: Wikipedia didn't answer (%ld %s)", resp.status, resp.error);
+    http_resp_free(&resp);
+    return;
+  }
+  j = http_json(&resp);
+  http_resp_free(&resp);
+  pages = cJSON_GetObjectItemCaseSensitive(cJSON_GetObjectItemCaseSensitive(j, "query"), "pages");
+  cJSON_ArrayForEach(p, pages) {
+    char title[256];
+    char key[256];
+    char *paren;
+    const char *desc = jstr(p, "description", "");
+    if (!strstr(desc, "film") || jint(p, "index", 1 << 30) >= best_index) {
+      continue;
+    }
+    svc_str_copy(title, sizeof(title), jstr(p, "title", ""));
+    paren = strstr(title, " (");
+    if (paren) {
+      *paren = '\0';
+    }
+    plain_key(title, key, sizeof(key));
+    if (!strcmp(key, want)) {
+      best = p;
+      best_index = jint(p, "index", 1 << 30);
+    }
+  }
+  if (best) {
+    const char *desc = jstr(best, "description", "");
+    const char *thumb = jstr(cJSON_GetObjectItemCaseSensitive(best, "thumbnail"), "source", "");
+    const char *y = first_year(desc);
+    char *paren;
+    svc_str_copy(d->title, sizeof(d->title), jstr(best, "title", ""));
+    paren = strstr(d->title, " (");
+    if (paren) {
+      *paren = '\0';
+    }
+    if (y) {
+      snprintf(d->subtitle, sizeof(d->subtitle), "%.4s", y);
+      snprintf(d->name, sizeof(d->name), "%.240s (%.4s)", d->title, y);
+    } else {
+      svc_str_copy(d->name, sizeof(d->name), d->title);
+    }
+    if (thumb[0] && !d->cover) {
+      fetch_cover(d, thumb);
+    }
+  } else {
+    RIP_INFO("details: Wikipedia has no film called '%s'", d->title);
+  }
+  cJSON_Delete(j);
+}
+
 // A movie on The Movie Database, by the name it has so far (the disc's own
 // title, or its volume label tidied): the first match's title, year and
-// poster. Only with a key in Settings (a v3 API key, or a v4 read token).
+// poster. With a key in Settings (a v3 API key, or a v4 read token); without
+// one, Wikipedia.
 static void movie(struct disc_details *d) {
   char key[300];
   char q[600];
@@ -204,7 +325,11 @@ static void movie(struct disc_details *d) {
   const cJSON *hit;
 
   settings_tmdb_key(key, sizeof(key));
-  if (!key[0] || !d->title[0]) {
+  if (!d->title[0]) {
+    return;
+  }
+  if (!key[0]) {
+    wikipedia(d);
     return;
   }
   url_escape(d->title, q, sizeof(q));

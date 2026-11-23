@@ -42,6 +42,18 @@ void rip_sha256_init(struct rip_sha256 *ctx);
 void rip_sha256_update(struct rip_sha256 *ctx, const void *data, size_t len);
 void rip_sha256_final(struct rip_sha256 *ctx, uint8_t out[32]);
 
+// HMAC-SHA256 (RFC 2104). A context just after init holds only the key, so it
+// can be copied and reused for many messages.
+struct rip_hmac_sha256 {
+  struct rip_sha256 inner;
+  struct rip_sha256 outer;
+};
+
+void rip_hmac_sha256_init(struct rip_hmac_sha256 *ctx, const void *key, size_t key_len);
+void rip_hmac_sha256_update(struct rip_hmac_sha256 *ctx, const void *data, size_t len);
+void rip_hmac_sha256_final(struct rip_hmac_sha256 *ctx, uint8_t out[32]);
+void rip_hmac_sha256(const void *key, size_t key_len, const void *data, size_t len, uint8_t out[32]);
+
 struct rip_hashes {
   uint64_t size;
   uint32_t crc32;

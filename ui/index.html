@@ -56,32 +56,33 @@ if (/PlayStation/.test(navigator.userAgent)) document.documentElement.className 
 </section>
 
 <section id="settings">
-  <div class="card" id="statsCard"></div>
+  <div class="card">
+    <h2>Ripping</h2>
+    <div class="toggle"><input type="checkbox" id="gAutoStart"><label for="gAutoStart">Rip Automatically</label></div>
+    <div class="toggle"><input type="checkbox" id="gAutoEject"><label for="gAutoEject">Eject When Done</label></div>
+    <label for="gRetries">Retries for a Bad Sector</label><input id="gRetries" type="number" min="0" max="20">
+    <label for="gTmdb">Movie Names and Posters: TMDB API Key (Optional)</label><input id="gTmdb" type="password" autocomplete="off" placeholder="themoviedb.org API key or read token">
+    <h3>Default Rip Settings</h3>
+    <div id="profiles"></div>
+  </div>
   <div class="card">
     <div class="row"><h2 style="margin:0">Destinations</h2>
       <select id="newDestType" class="fixed" aria-label="Destination type"></select>
       <button class="fixed" id="addDest">Add</button></div>
-    <p class="muted">Where rips go.</p>
     <div id="dests"></div>
   </div>
   <div class="card">
-    <h2>Disc types</h2>
-    <p class="muted">What each kind of disc rips to.</p>
-    <div id="profiles"></div>
+    <h2>Keys</h2>
+    <div id="keyFiles"></div>
   </div>
   <div class="card">
-    <h2>General</h2>
+    <h2>Console</h2>
     <div class="toggle"><input type="checkbox" id="gNotify"><label for="gNotify">Notifications</label></div>
-    <div class="toggle"><input type="checkbox" id="gAutoEject"><label for="gAutoEject">Eject when done</label></div>
-    <div class="toggle"><input type="checkbox" id="gAutoStart"><label for="gAutoStart">Rip as soon as a disc is ready</label></div>
-    <div class="toggle"><input type="checkbox" id="gKeepFront"><label for="gKeepFront">Keep RipperPS in front when a disc goes in</label></div>
-    <label for="gRetries">Retries for each unreadable sector</label><input id="gRetries" type="number" min="0" max="20">
-    <label for="gKeys">PS3 key file</label><input id="gKeys" autocomplete="off">
-    <label for="gTmdb">TMDB key, for movie names and posters</label><input id="gTmdb" type="password" autocomplete="off" placeholder="themoviedb.org API key or read token">
-    <label for="gTheme">Look</label>
+    <label for="gTheme">Theme</label>
     <select id="gTheme"><option value="acrylic">Acrylic</option><option value="classic">Classic</option></select>
   </div>
-  <div class="row savebar"><span class="muted" id="saveNote"></span><button class="primary fixed" id="saveSettings">Save settings</button></div>
+  <div class="card" id="statsCard"></div>
+  <div class="row savebar"><span class="muted" id="saveNote"></span><button class="primary fixed" id="saveSettings">Save Settings</button></div>
 </section>
 
 <section id="log">
@@ -124,11 +125,13 @@ function api(method, path, body) {
   return fetch(path, opt).then(function (r) {
     var ct = r.headers.get("Content-Type") || "";
     var p = ct.indexOf("json") >= 0 ? r.json() : r.text();
-    return p.then(function (d) { if (!r.ok) throw new Error((d && d.error) || ("HTTP " + r.status)); return d; });
+    return p.then(function (d) { if (!r.ok) throw new Error(sentence((d && d.error) || ("HTTP " + r.status))); return d; });
   });
 }
+// The service's messages are written to fit in a sentence. Shown on their own, they start with a capital.
+function sentence(text) { text = String(text || ""); return text.charAt(0).toUpperCase() + text.slice(1); }
 function toast(msg, isErr) {
-  var t = $("toast"); t.textContent = msg; t.style.color = isErr ? "var(--err)" : "";
+  var t = $("toast"); t.textContent = sentence(msg); t.style.color = isErr ? "var(--err)" : "";
   t.style.display = "block"; clearTimeout(toast.t); toast.t = setTimeout(function () { t.style.display = "none"; }, 4000);
 }
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return "&#" + c.charCodeAt(0) + ";"; }); }
@@ -232,16 +235,16 @@ function renderDrive() {
   } else if (d.state === "loading" || d.state === "identifying") {
     h += '<div class="waiting"><div class="discicon spin"></div><h2 class="pulse">' + esc(STATE_TEXT[d.state]) + "</h2>" + driveFacts(d) + "</div>";
   } else if (d.state === "unsupported") {
-    h += discHead(d, disc) + '<div class="notice"><b>This disc can\'t be ripped here.</b> ' + esc(d.message) + "</div>" + otherFormats(d) +
+    h += discHead(d, disc) + '<div class="notice"><b>This disc can\'t be ripped here.</b> ' + esc(sentence(d.message)) + "</div>" + otherFormats(d) +
       '<div class="row"><button id="ejectBtn">Eject</button><button id="readAgain">Read again</button></div>';
   } else if (d.state === "ready" || d.state === "done") {
     h += discHead(d, disc);
-    if (d.state === "done" && job) h += '<div class="notice okline">' + (job.state === "done" ? "Ripped to " + esc(job.where || job.destination_name) : esc(job.error || job.state)) + "</div>";
+    if (d.state === "done" && job) h += '<div class="notice okline">' + (job.state === "done" ? "Ripped to " + esc(job.where || job.destination_name) : esc(sentence(job.error || job.state))) + "</div>";
     h += ripSheet(d);
   } else if (d.state === "ripping") {
     h += discHead(d, disc) + '<div id="ripProgress"></div><div class="row" style="margin-top:12px"><button class="danger" id="cancelRip">Cancel</button></div>';
   } else if (d.state === "installing") {
-    h += discHead(d, disc) + '<div id="installProgress"></div><div class="notice">' + esc(d.message) + "</div>";
+    h += discHead(d, disc) + '<div id="installProgress"></div><div class="notice">' + esc(sentence(d.message)) + "</div>";
   }
   if (d.source === "virtual" && d.state !== "empty") h += imageLoader(d);
   panel.innerHTML = h + '</div><div class="card" id="diagBox"></div>';
@@ -268,7 +271,7 @@ function otherFormats(d) {
   var f = (d.offer && d.offer.formats) || [];
   if (!f.length) return "";
   var h = '<table class="formats"><tbody>';
-  f.forEach(function (x) { h += "<tr><td>" + esc(x.label) + "</td><td>" + pill(x.availability, x.available ? "ok" : "off") + '</td><td class="muted">' + esc(x.reason) + "</td></tr>"; });
+  f.forEach(function (x) { h += "<tr><td>" + esc(x.label) + "</td><td>" + pill(sentence(x.availability), x.available ? "ok" : "off") + '</td><td class="muted">' + esc(sentence(x.reason)) + "</td></tr>"; });
   return h + "</tbody></table>";
 }
 
@@ -284,8 +287,8 @@ function ripSheet(d) {
     var dis = !f.available;
     h += '<label class="choice' + (dis ? " disabled" : "") + '"><input type="radio" name="fmt" value="' + esc(f.id) + '"' +
       (f.id === form.format ? " checked" : "") + (dis ? " disabled" : "") + "><div><b>" + esc(f.label) + "</b>" +
-      (dis ? '<span class="muted">' + esc(f.reason) + "</span>" : '<span class="muted">' + esc((formatInfo(offer.system, f.id) || {}).help || "") + "</span>") +
-      (f.note && !dis ? '<span class="warn">' + esc(f.note) + "</span>" : "") + "</div></label>";
+      (dis ? '<span class="muted">' + esc(sentence(f.reason)) + "</span>" : '<span class="muted">' + esc((formatInfo(offer.system, f.id) || {}).help || "") + "</span>") +
+      (f.note && !dis ? '<span class="warn">' + esc(sentence(f.note)) + "</span>" : "") + "</div></label>";
   });
   h += '</div><div id="fmtOptions"></div><div class="grid2">' +
     '<div><label for="ripName">Name</label><input id="ripName" value="' + esc(form.name) + '" autocomplete="off"></div>' +
@@ -402,12 +405,12 @@ function renderJobs() {
   var h = "";
   state.jobs.forEach(function (j) {
     var cls = { done: "ok", failed: "warn", cancelled: "off" }[j.state] || "";
-    h += '<div class="dl-item"><div class="row"><div><b>' + esc(j.name) + "</b><div>" + pill(j.state, cls) + pill(j.system_name || j.system, "off") +
+    h += '<div class="dl-item"><div class="row"><div><b>' + esc(j.name) + "</b><div>" + pill(sentence(j.state), cls) + pill(j.system_name || j.system, "off") +
       pill(j.format_label || j.format, "off") + pill("→ " + j.destination_name, "off") + '</div></div><div class="fixed btns">' +
       (j.state === "ripping" || j.state === "delivering" ? '<button class="small danger" data-cancel="' + j.id + '">Cancel</button>' : "") +
       (j.retryable ? '<button class="small" data-retry="' + j.id + '">Send again</button>' : "") + "</div></div>";
     if (j.state === "ripping" || j.state === "delivering") h += progressHtml(j);
-    else h += '<div class="meta">' + esc(fmtTime(j.finished)) + (j.where ? " · " + esc(j.where) : "") + (j.error ? ' · <span class="err">' + esc(j.error) + "</span>" : "") + (j.note ? ' · <span class="warn">' + esc(j.note) + "</span>" : "") + "</div>";
+    else h += '<div class="meta">' + esc(fmtTime(j.finished)) + (j.where ? " · " + esc(j.where) : "") + (j.error ? ' · <span class="err">' + esc(sentence(j.error)) + "</span>" : "") + (j.note ? ' · <span class="warn">' + esc(sentence(j.note)) + "</span>" : "") + "</div>";
     h += "</div>";
   });
   $("jobs").innerHTML = h;
@@ -431,7 +434,7 @@ function renderGames() {
   g.forEach(function (x, i) {
     h += "<tr><td><b>" + esc(x.title) + '</b><div class="muted small">' + esc(x.title_id) + "</div></td><td>" + (x.system === "ps5" ? "PS5" : "PS4") +
       "</td><td>" + fmtSize(x.size) + '</td><td class="fixed">' +
-      (!x.complete ? pill("still installing", "warn") : x.partial ? pill("not all installed: can't dump yet", "warn") : '<button class="small" data-dump="' + i + '">Dump</button>') + "</td></tr>";
+      (!x.complete ? pill("Still installing", "warn") : x.partial ? pill("Not fully installed", "warn") : '<button class="small" data-dump="' + i + '">Dump</button>') + "</td></tr>";
   });
   $("gameList").innerHTML = h + "</tbody></table>";
   each("[data-dump]", function (b) { b.onclick = function () { dumpSheet(state.games[+b.dataset.dump]); }; });
@@ -472,7 +475,7 @@ function loadStats() {
     var top = Object.keys(st.systems || {}).sort(function (a, b) { return st.systems[b] - st.systems[a]; }).slice(0, 4)
       .map(function (k) { var sys = state.catalog ? find(state.catalog.systems, "id", k) : null; return st.systems[k] + " " + (sys ? sys.name : k); });
     var hours = st.seconds / 3600;
-    $("statsCard").innerHTML = "<h2>Ripped on this console</h2><div>" + pill(st.discs + (st.discs === 1 ? " disc" : " discs")) +
+    $("statsCard").innerHTML = "<h2>Ripped on This Console</h2><div>" + pill(st.discs + (st.discs === 1 ? " disc" : " discs")) +
       pill(hours >= 1 ? hours.toFixed(1) + " h ripping" : Math.round(st.seconds / 60) + " min ripping", "off") +
       pill(fmtSize(st.bytes) + " read", "off") + pill(fmtSize(st.sent) + " sent", "off") +
       (st.failed ? pill(st.failed + " failed", "warn") : "") + "</div>" + (top.length ? '<p class="muted small">' + esc(top.join(" · ")) + "</p>" : "");
@@ -494,9 +497,8 @@ function destType(t) { return state.catalog ? find(state.catalog.destination_typ
 function renderSettings() {
   var s = editing;
   $("gNotify").checked = !!s.notify; $("gAutoEject").checked = !!s.auto_eject; $("gAutoStart").checked = !!s.auto_start;
-  $("gKeepFront").checked = s.keep_front !== false;
   $("gTmdb").value = ""; $("gTmdb").placeholder = s.tmdb_key_set ? "Saved (type to replace)" : "themoviedb.org API key or read token";
-  $("gRetries").value = s.read_retries; $("gKeys").value = s.ps3_keys || ""; $("gTheme").value = s.ui_theme || "acrylic";
+  $("gRetries").value = s.read_retries; $("gTheme").value = s.ui_theme || "acrylic";
   var types = "";
   state.catalog.destination_types.forEach(function (t) { types += '<option value="' + esc(t.type) + '"' + (t.available ? "" : " disabled") + ">" + esc(t.label) + (t.available ? "" : " (not in this build)") + "</option>"; });
   $("newDestType").innerHTML = types;
@@ -551,7 +553,7 @@ function testDest(i) {
   var d = editing.destinations[i], out = document.querySelector('[data-result="' + i + '"]');
   out.className = "small muted pulse"; out.textContent = "Checking";
   api("POST", "/api/destinations/test", { destination: d }).then(function (r) {
-    out.className = "small " + (r.ok ? "ok" : "err"); out.textContent = r.message;
+    out.className = "small " + (r.ok ? "ok" : "err"); out.textContent = sentence(r.message);
   }).catch(function (e) { out.className = "small err"; out.textContent = e.message; });
 }
 
@@ -577,7 +579,7 @@ function pairDest(i) {
       if (input) input.value = r.token;
       o.className = "small ok"; o.textContent = "Paired. Save to keep it.";
     } else if (r.status === "error") {
-      o.className = "small err"; o.textContent = r.message;
+      o.className = "small err"; o.textContent = sentence(r.message);
     }
   }
   function poll() { api("GET", "/api/romm/pair").then(show).catch(function (e) { out.className = "small err"; out.textContent = e.message; }); }
@@ -590,7 +592,6 @@ $("addDest").onclick = function () {
   while (find(editing.destinations, "id", id)) id = type + "-" + (++n);
   var d = { id: id, type: type, name: t.label + (n > 1 ? " " + n : "") };
   t.fields.forEach(function (f) { if (f.type === "toggle") d[f.id] = f.default === "1"; else if (f.type === "number") d[f.id] = +(f.default || 0); else if (f.type !== "secret") d[f.id] = f.default || ""; });
-  editing.destinations.push(d);
   var fromRommps = type === "romm" && state.rommps && state.rommps.found;
   if (fromRommps) { d.url = state.rommps.url; d.tls_verify = state.rommps.tls_verify }
   editing.destinations.push(d);
@@ -601,23 +602,41 @@ $("addDest").onclick = function () {
   }
 };
 
+// The console's storage, or only its USB drives for a USB destination. Opens
+// where the folder is now, or the nearest folder above it that's there.
 function pickFolder(i) {
   var d = editing.destinations[i];
+  picker({ scope: d.type === "usb" ? "usb" : "local", start: d.path || "", done: function (path) { d.path = path; renderDests(); } });
+}
+
+// Folders to go through, then a folder to use (or, with files, a file).
+function picker(o) {
+  var scope = o.scope || "";
+  function up(p) { var k = (p || "").lastIndexOf("/"); return k > 0 ? p.slice(0, k) : ""; }
+  function close() { $("modal").classList.remove("on"); }
   function show(path) {
-    api("GET", "/api/folders?path=" + encodeURIComponent(path || "")).then(function (r) {
-      var h = '<h2>Choose a folder</h2><p class="muted">' + esc(r.path || "Storage") + '</p><div class="row">' +
-        (r.path ? '<button class="primary" id="pickUse">Use this folder</button>' : "") + (r.path ? '<button id="pickUp">Up</button>' : "") +
+    api("GET", "/api/folders?scope=" + scope + (o.files ? "&files=1" : "") + "&path=" + encodeURIComponent(path || "")).then(function (r) {
+      var h = "<h2>" + (o.files ? "Choose a File" : "Choose a Folder") + '</h2><p class="muted">' + esc(r.path || (scope === "usb" ? "USB drives" : "Storage")) + '</p><div class="row">' +
+        (r.path ? (o.files ? "" : '<button class="primary" id="pickUse">Use This Folder</button><button id="pickNew">New Folder</button>') + '<button id="pickUp">Up</button>' : '<button id="pickUp">Look Again</button>') +
         '<button id="pickClose">Cancel</button></div><div class="picklist">';
-      r.folders.forEach(function (f) { h += '<button class="pickitem" data-path="' + esc(f.path) + '">' + esc(f.name) + "</button>"; });
+      if (!r.path && !r.folders.length) h += '<p class="muted">' + (scope === "usb" ? "No USB drive is plugged in." : "Nothing to pick from.") + "</p>";
+      r.folders.forEach(function (f) { h += '<button class="pickitem" data-path="' + esc(f.path) + '">' + esc(f.name) + "/</button>"; });
+      (r.files || []).forEach(function (f) { h += '<button class="pickitem" data-file="' + esc(f.path) + '">' + esc(f.name) + "</button>"; });
       $("modalCard").innerHTML = h + "</div>";
       $("modal").classList.add("on");
-      each(".pickitem", function (b) { b.onclick = function () { show(b.dataset.path); }; });
-      if ($("pickUp")) $("pickUp").onclick = function () { show(r.parent); };
-      if ($("pickUse")) $("pickUse").onclick = function () { d.path = r.path; $("modal").classList.remove("on"); renderDests(); };
-      $("pickClose").onclick = function () { $("modal").classList.remove("on"); };
-    }).catch(function (e) { toast(e.message, true); });
+      each(".pickitem[data-path]", function (b) { b.onclick = function () { show(b.dataset.path); }; });
+      each(".pickitem[data-file]", function (b) { b.onclick = function () { close(); o.done(b.dataset.file); }; });
+      $("pickUp").onclick = function () { show(r.path ? r.parent : ""); };
+      if ($("pickUse")) $("pickUse").onclick = function () { close(); o.done(r.path); };
+      if ($("pickNew")) $("pickNew").onclick = function () {
+        var name = (window.prompt("New folder in " + r.path + ":") || "").trim();
+        if (!name || name.indexOf("/") >= 0 || name === "." || name === "..") return;
+        close(); o.done(r.path + "/" + name);
+      };
+      $("pickClose").onclick = close;
+    }).catch(function (e) { if (path) show(up(path)); else toast(e.message, true); });
   }
-  show("");
+  show(o.start || "");
 }
 
 var GROUPS = [["games", "Games"], ["movies", "Movies"], ["music", "Music"], ["other", "Other"]];
@@ -627,16 +646,16 @@ function renderProfiles() {
   GROUPS.forEach(function (g) {
     var systems = state.catalog.systems.filter(function (s) { return s.group === g[0]; });
     if (!systems.length) return;
-    h += '<h3>' + g[1] + "</h3>";
+    h += '<h4>' + g[1] + "</h4>";
     systems.forEach(function (s) {
       var p = editing.profiles[s.id] || s.defaults, opts = "";
       s.formats.forEach(function (f) { opts += '<option value="' + esc(f.id) + '"' + (f.id === p.format ? " selected" : "") + ">" + esc(f.label) + (f.planned ? " (coming)" : "") + "</option>"; });
       h += '<details class="tplat profile" data-sys="' + esc(s.id) + '"><summary><b>' + esc(s.name) + '</b> <span class="muted">' +
         esc((find(s.formats, "id", p.format) || {}).label || p.format) + " → " + esc(destName(p.destination)) + '</span></summary><div class="grid2">' +
         '<div><label>Format</label><select data-p="format">' + opts + "</select></div>" +
-        '<div><label>Send to</label><select data-p="destination">' + destOptions(p.destination) + "</select></div>" +
+        '<div><label>Send To</label><select data-p="destination">' + destOptions(p.destination) + "</select></div>" +
         '<div><label>Folder</label><input data-p="folder" value="' + esc(p.folder) + '" placeholder="{system}"></div>' +
-        (s.romm_slug ? '<div><label>RomM platform</label><input data-p="romm_platform" value="' + esc(p.romm_platform || s.romm_slug) + '"></div>' : "") +
+        (s.romm_slug ? '<div><label>RomM Platform</label><input data-p="romm_platform" value="' + esc(p.romm_platform || s.romm_slug) + '"></div>' : "") +
         '</div><div class="profopts"></div></details>';
     });
   });
@@ -663,10 +682,12 @@ function renderProfileOptions(box) {
 $("saveSettings").onclick = function () {
   var s = editing;
   s.notify = $("gNotify").checked; s.auto_eject = $("gAutoEject").checked; s.auto_start = $("gAutoStart").checked;
-  s.keep_front = $("gKeepFront").checked;
   delete s.tmdb_key_set;
   if ($("gTmdb").value) s.tmdb_key = $("gTmdb").value;
-  s.read_retries = +$("gRetries").value || 0; s.ps3_keys = $("gKeys").value.trim(); s.ui_theme = $("gTheme").value;
+  s.read_retries = +$("gRetries").value || 0; s.ui_theme = $("gTheme").value;
+  s.keys = {};
+  (s.key_files || []).forEach(function (k) { s.keys[k.id] = k.path === k.default ? "" : k.path; });
+  delete s.key_files;
   each(".dest", readDest);
   api("POST", "/api/settings", s).then(function (r) {
     state.settings = r; editing = JSON.parse(JSON.stringify(r)); renderSettings();
@@ -700,17 +721,18 @@ var WANTED = [
   ["Xbox 360", "The unlock, the security sector, which XGD it is", "Kreon (Lite-On, Samsung, Philips DVD drives), OmniDrive"],
   ["Xbox (original)", "The same for XGD1", "Kreon, OmniDrive"],
   ["Wii U", "Raw Blu-ray reads with Nintendo's seed", "OmniDrive on a Blu-ray drive"],
+  ["4K Blu-ray movie", "Whether the movie comes out without bus encryption, through a normal read or OmniDrive's raw one", "OmniDrive or LibreDrive on a 4K-capable drive"],
   ["Dreamcast (GD-ROM)", "Whether the high-density area reads", "CD drives that read past the lead-out (Plextor, some Lite-On)"],
-  ["Saturn, Sega CD, PC Engine CD, 3DO, CD-i, PS1", "Identification, C2, subchannel and offsets for CD games", "Any CD drive; Plextor best"],
+  ["Saturn, Sega CD, PC Engine CD, 3DO, CD-i, PS1", "Identification, C2, subchannel and offsets for CD games", "Any CD drive, Plextor best"],
   ["Xbox One or Series", "What a USB Blu-ray drive shows of them", "Any Blu-ray drive"],
   ["Music CD", "Read offset, C2 and accurate audio", "Any CD drive"],
   ["PS4 or PS5 game", "Whether a USB drive reads them at all", "Any Blu-ray drive"],
-  ["DVD or Blu-ray movie", "Copy protection handling, read speed", "Any; LibreDrive for 4K"]
+  ["DVD or Blu-ray movie", "Copy protection handling, read speed", "Any"]
 ];
 function wantedTable() {
   var h = '<div class="tablewrap"><table class="formats wanted"><thead><tr><th>Disc</th><th>What it tells us</th><th>Drives most likely to read it</th></tr></thead><tbody>';
   WANTED.forEach(function (w, i) {
-    h += "<tr><td><b>" + esc(w[0]) + "</b>" + (i < 4 ? " " + pill("most wanted", "ok") : "") + "</td><td>" + esc(w[1]) + '</td><td class="muted">' + esc(w[2]) + "</td></tr>";
+    h += "<tr><td><b>" + esc(w[0]) + "</b>" + (i < 4 ? " " + pill("Most wanted", "ok") : "") + "</td><td>" + esc(w[1]) + '</td><td class="muted">' + esc(w[2]) + "</td></tr>";
   });
   return h + "</tbody></table></div>";
 }
@@ -735,7 +757,7 @@ function dtFormUrl(g) {
 }
 function dtDisc(x, editable) {
   var h = '<div class="dtdisc"><div class="dthead"><b>Disc ' + x.n + "</b> " +
-    pill(x.result, x.result === "tested" || x.result === "report only" ? "ok" : x.result === "testing" ? "" : "off") + "</div>";
+    pill(sentence(x.result), x.result === "tested" || x.result === "report only" ? "ok" : x.result === "testing" ? "" : "off") + "</div>";
   h += '<p class="small">RipperPS saw <b>' + esc(x.kind || "nothing it knows") + "</b>" + (x.title ? " · " + esc(x.title) : "") +
     (x.profile ? ' <span class="muted">(' + esc(x.profile) + ")</span>" : "") + "<br>" + esc(x.outcome) +
     (x.can ? '<br><span class="muted">Can make here: ' + esc(x.can) + "</span>" : "") + "</p>";
@@ -775,7 +797,7 @@ function renderDriveTest() {
     h += '<div class="notice dtprompt' + (g.state === "done" ? " okline" : "") + '"><b' + (g.state === "testing" ? ' class="pulse"' : "") + ">" + esc(g.prompt) + "</b>";
     if (g.state === "testing") h += '<div class="bar" style="margin-top:8px"><i id="dtBar" style="width:' + (g.total ? Math.round(100 * g.done / g.total) : 0) + '%"></i></div><p class="muted small">' + esc(g.step) + "</p>";
     h += "</div>";
-    if (g.state === "failed" && g.error) h += '<p class="err small">' + esc(g.error) + "</p>";
+    if (g.state === "failed" && g.error) h += '<p class="err small">' + esc(sentence(g.error)) + "</p>";
     if (active) h += '<details' + ((g.discs || []).length ? "" : " open") + '><summary>Which discs help most</summary>' + wantedTable() + "</details>";
     if (active) {
       var d = find(state.drives, "id", g.drive);

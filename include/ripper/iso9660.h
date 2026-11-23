@@ -18,6 +18,8 @@ struct iso_entry {
 struct iso_fs {
   struct rip_reader *r;
   struct iso_entry root;
+  struct iso_entry joliet_root;  // Joliet's tree, with the long names (PS3 discs have one)
+  int joliet;
   uint32_t volume_blocks;
   char system_id[33];
   char volume_id[33];
@@ -29,5 +31,12 @@ int iso_mount(struct iso_fs *fs, struct rip_reader *r);
 int iso_lookup(struct iso_fs *fs, const char *path, struct iso_entry *out);
 // Reads a whole file of at most max bytes. The caller frees *out.
 int iso_read_file(struct iso_fs *fs, const struct iso_entry *e, size_t max, uint8_t **out, size_t *out_len);
+
+// Writes every file and folder into out_dir (made if needed), by their Joliet
+// names when the disc has them. Files over 4 GiB, stored in several extents,
+// come out whole. progress gets bytes written of the total, a nonzero return
+// stops it (RIP_ECANCEL).
+typedef int (*iso_progress_fn)(void *ud, uint64_t done, uint64_t total);
+int iso_extract(struct iso_fs *fs, const char *out_dir, iso_progress_fn progress, void *ud);
 
 #endif

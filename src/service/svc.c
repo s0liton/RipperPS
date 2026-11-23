@@ -346,7 +346,8 @@ void svc_pretty_label(const char *label, char *out, size_t n) {
   while (len && buf[len - 1] == ' ') {
     buf[--len] = '\0';
   }
-  if (len > 3 && buf[len - 3] == ' ' && (buf[len - 2] == 'D' || buf[len - 2] == 'd') && isdigit((unsigned char)buf[len - 1])) {
+  if (len > 3 && buf[len - 3] == ' ' && (buf[len - 2] == 'D' || buf[len - 2] == 'd') &&
+      isdigit((unsigned char)buf[len - 1])) {
     buf[len - 3] = '\0';
   }
   for (i = 0; buf[i]; i++) {
@@ -469,6 +470,46 @@ void svc_time_left(double seconds, char *out, size_t n) {
   } else {
     snprintf(out, n, " · %d h %d min left", min / 60, min % 60);
   }
+}
+
+int svc_is_mount(const char *path) {
+  char parent[SVC_PATH];
+  char *slash;
+  struct stat a;
+  struct stat b;
+
+  svc_str_copy(parent, sizeof(parent), path);
+  slash = strrchr(parent, '/');
+  if (!slash) {
+    return 0;
+  }
+  if (slash == parent) {
+    slash[1] = '\0';
+  } else {
+    *slash = '\0';
+  }
+  return stat(path, &a) == 0 && S_ISDIR(a.st_mode) && stat(parent, &b) == 0 && a.st_dev != b.st_dev;
+}
+
+void svc_squeeze(const char *in, char *out, size_t n) {
+  size_t k = 0;
+  int space = 0;
+
+  if (!n) {
+    return;
+  }
+  for (; *in && k + 1 < n; in++) {
+    if (*in == ' ') {
+      space = k > 0;
+      continue;
+    }
+    if (space && k + 2 < n) {
+      out[k++] = ' ';
+    }
+    space = 0;
+    out[k++] = *in;
+  }
+  out[k] = '\0';
 }
 
 void svc_slug(const char *in, char *out, size_t n) {

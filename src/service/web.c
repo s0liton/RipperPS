@@ -9,15 +9,16 @@
 #include <string.h>
 #include <strings.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/time.h>
 #include <unistd.h>
 
 #include "bench.h"
 #include "catalog.h"
 #include "deliver.h"
-#include "drivetest.h"
 #include "disc_report.h"
 #include "drives.h"
+#include "drivetest.h"
 #include "jobs.h"
 #include "platform.h"
 #include "ripper/common.h"
@@ -322,11 +323,15 @@ static cJSON *status_json(void) {
 }
 
 // Folders below the storage roots, for picking where a local destination goes.
-static cJSON *folders_json(const char *path, char *err, size_t en) {
+// scope "usb" keeps the USB drives' roots, "local" the others, "" all of them.
+// With files, the folder's files are listed too, for picking one (a key file).
+static cJSON *folders_json(const char *path, const char *scope, int files, char *err, size_t en) {
   struct plat_root roots[8];
   int nroots = plat_storage_roots(roots, 8);
+  int kept = 0;
   cJSON *j = cJSON_CreateObject();
   cJSON *list = cJSON_AddArrayToObject(j, "folders");
+  cJSON *file_list = NULL;
   char clean[SVC_PATH];
   size_t l;
   int inside = 0;
@@ -335,6 +340,13 @@ static cJSON *folders_json(const char *path, char *err, size_t en) {
   DIR *d;
   struct dirent *e;
 
+  for (i = 0; i < nroots; i++) {
+    int usb = !strncmp(roots[i].path, "/mnt/usb", 8);
+    if (!scope[0] || (!strcmp(scope, "usb") ? usb : !usb)) {
+      roots[kept++] = roots[i];
+    }
+  }
+  nroots = kept;
   if (!path[0]) {
     cJSON_AddStringToObject(j, "path", "");
     cJSON_AddStringToObject(j, "parent", "");
@@ -358,6 +370,9 @@ static cJSON *folders_json(const char *path, char *err, size_t en) {
       at_root |= clean[rl] == '\0';
     }
   }
+  if (files) {
+    file_list = cJSON_AddArrayToObject(j, "files");
+  }
   if (clean[0] != '/' || strstr(clean, "/..") || !inside || !svc_dir_exists(clean)) {
     snprintf(err, en, "not a folder RipperPS can use");
     cJSON_Delete(j);
@@ -375,6 +390,15 @@ static cJSON *folders_json(const char *path, char *err, size_t en) {
       cJSON_AddStringToObject(f, "path", full);
       cJSON_AddStringToObject(f, "name", e->d_name);
       cJSON_AddItemToArray(list, f);
+    } else if (files && file_list && cJSON_GetArraySize(file_list) < 500) {
+      struct stat st;
+      if (stat(full, &st) == 0 && S_ISREG(st.st_mode)) {
+        cJSON *f = cJSON_CreateObject();
+        cJSON_AddStringToObject(f, "path", full);
+        cJSON_AddStringToObject(f, "name", e->d_name);
+        cJSON_AddNumberToObject(f, "size", (double)st.st_size);
+        cJSON_AddItemToArray(file_list, f);
+      }
     }
   }
   if (d) {
@@ -613,8 +637,7 @@ static void route(struct request *r) {
     cJSON *j = body_json(r);
     const cJSON *said = cJSON_GetObjectItemCaseSensitive(j, "said");
     const cJSON *note = cJSON_GetObjectItemCaseSensitive(j, "note");
-    int rc = drivetest_label(jint(j, "n", 0), cJSON_GetStringValue(said), cJSON_GetStringValue(note), err,
-                             sizeof(err));
+    int rc = drivetest_label(jint(j, "n", 0), cJSON_GetStringValue(said), cJSON_GetStringValue(note), err, sizeof(err));
     cJSON_Delete(j);
     if (rc == RIP_OK) {
       send_ok(fd);
@@ -749,8 +772,12 @@ static void route(struct request *r) {
   if (is_get && !strcmp(r->path, "/api/folders")) {
     char path[SVC_PATH];
     cJSON *j;
+    char scope[16];
+    char files[4];
     qparam(r, "path", path, sizeof(path));
-    j = folders_json(path, err, sizeof(err));
+    qparam(r, "scope", scope, sizeof(scope));
+    qparam(r, "files", files, sizeof(files));
+    j = folders_json(path, scope, files[0] == '1', err, sizeof(err));
     if (j) {
       send_json(fd, 200, j);
     } else {
@@ -867,7 +894,7 @@ int web_start(int port) {
   g_port = port;
   g_srv = open_listener(port);
   if (g_srv < 0) {
-    RIP_ERROR("cannot listen on port %d: %s; retrying", port, strerror(errno));
+    RIP_ERROR("cannot listen on port %d (%s), retrying", port, strerror(errno));
   }
   svc_thread(accept_thread, NULL);
   return g_srv < 0 ? -1 : 0;

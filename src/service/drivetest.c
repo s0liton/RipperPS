@@ -144,9 +144,15 @@ static int take_report(const char *id, unsigned seq, const char *disc_dir) {
 // The lines of a disc report that say what the disc looks like and what
 // custom firmware got out of it: the evidence that a drive can read a kind.
 static void report_signs(const char *disc_dir, char *out, size_t n) {
-  static const char *const MARKS[] = {"looks like: ", "XGD",          "Xbox security sector", "C0 raw read",
-                                      "  DVD scrambling",  "  Nintendo scrambling", "  Blu-ray scrambling",
-                                      "GD-ROM: ",          NULL};
+  static const char *const MARKS[] = {"looks like: ",
+                                      "XGD",
+                                      "Xbox security sector",
+                                      "C0 raw read",
+                                      "  DVD scrambling",
+                                      "  Nintendo scrambling",
+                                      "  Blu-ray scrambling",
+                                      "GD-ROM: ",
+                                      NULL};
   char path[SVC_PATH + 160];
   char line[512];
   FILE *f;
@@ -329,21 +335,7 @@ static void write_log(const char *dir, const char *started) {
 
 // "SONY     PS-SYSTEM   502R 1305" -> "SONY PS-SYSTEM 502R 1305": INQUIRY pads its fields with spaces.
 static void set_drive_name(const char *name) {
-  size_t k = 0;
-  int space = 0;
-
-  for (; *name && k + 1 < sizeof(g.drive_name); name++) {
-    if (*name == ' ') {
-      space = k > 0;
-      continue;
-    }
-    if (space && k + 2 < sizeof(g.drive_name)) {
-      g.drive_name[k++] = ' ';
-    }
-    space = 0;
-    g.drive_name[k++] = *name;
-  }
-  g.drive_name[k] = '\0';
+  svc_squeeze(name, g.drive_name, sizeof(g.drive_name));
 }
 
 /* Testing */
@@ -424,7 +416,9 @@ static void describe(struct entry *e, const cJSON *drive) {
     svc_str_copy(e->kind, sizeof(e->kind), jstr(offer, "system_name", e->kind));
   }
   svc_str_copy(e->outcome, sizeof(e->outcome),
-               message[0] ? message : !strcmp(e->drive_state, "ready") ? "ready to rip" : e->drive_state);
+               message[0]                         ? message
+               : !strcmp(e->drive_state, "ready") ? "ready to rip"
+                                                  : e->drive_state);
   cJSON_ArrayForEach(fmt, cJSON_GetObjectItemCaseSensitive(offer, "formats")) {
     const char *label = jstr(fmt, "label", "");
     if (jbool(fmt, "available", 0)) {
@@ -515,8 +509,7 @@ static void test_disc(const char *id, unsigned seq) {
     e.commands = sum.commands;
     e.answered = sum.answered;
     report_signs(disc_dir, e.signs, sizeof(e.signs));
-    svc_str_copy(e.result, sizeof(e.result),
-                 rc == RIP_OK ? "tested" : rc == RIP_ECANCEL ? "stopped" : "failed");
+    svc_str_copy(e.result, sizeof(e.result), rc == RIP_OK ? "tested" : rc == RIP_ECANCEL ? "stopped" : "failed");
   }
 
   pthread_mutex_lock(&g_lock);
@@ -727,8 +720,9 @@ static void *session_thread(void *arg) {
   }
   set_state("finishing", "Packing the results.");
   if (pack() == RIP_OK) {
-    set_state("done", "Thank you! Download the zip and attach it to the drive report form. Say what you can about "
-                      "the drive there: its model, its firmware, and the enclosure or adapter it's in.");
+    set_state("done",
+              "Thank you! Download the zip and attach it to the drive report form. Say what you can about "
+              "the drive there: its model, its firmware, and the enclosure or adapter it's in.");
     RIP_INFO("drive test done: %s", g.file);
   } else {
     pthread_mutex_lock(&g_lock);

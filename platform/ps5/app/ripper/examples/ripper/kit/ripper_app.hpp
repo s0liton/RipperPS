@@ -197,13 +197,22 @@ struct Status {
 };
 
 // The payload's settings that RipperPS shows and changes (/api/settings).
+// A key file for a kind of disc that needs one (PS3 discs): the one in use,
+// the default, and whether it's there.
+struct KeyFile {
+  std::string id, label, path, def;
+  bool found = false;
+  int count = 0;
+};
+
 struct Settings {
   bool known = false;
-  bool notify = true, auto_eject = true, auto_start = false, keep_front = true;
+  bool notify = true, auto_eject = true, auto_start = false;
   bool tmdb_key_set = false;  // a key for movie names and posters is saved
   int read_retries = 3;
   std::vector<Destination> destinations;
   std::map<std::string, Profile> profiles;
+  std::vector<KeyFile> key_files;
   const Destination *destination(const std::string &id) const {
     for (const Destination &d : destinations)
       if (d.id == id)
@@ -349,6 +358,9 @@ class App {
   // Changes settings: fields is a JSON object's members ("\"notify\":true").
   // The copy here changes at once; a refusal puts the payload's back.
   void set_settings(const std::string &fields, const std::function<void(Settings &)> &apply);
+  // Picks the key file for a kind of disc ("" for the default), then asks
+  // the payload again for whether it's there.
+  void set_key_file(const std::string &id, const std::string &path);
   // Saves the whole list of destinations (one added, changed or removed).
   void save_destinations(const std::vector<Destination> &list, std::function<void(bool)> done = nullptr);
   // Checks a destination as edited; done gets whether it worked and what was found.
@@ -360,7 +372,7 @@ class App {
   void refresh_stats();
   void refresh_rommps();
   // Keeps the console out of rest mode for that long (0 ends it).
-  void keep_awake(int minutes);
+
 
   // Any other call to the payload.
   void get(const std::string &path, Api::Callback done) {
@@ -452,6 +464,9 @@ inline std::string plain_text(const std::string &text) {
 // kit has loaded them, before the payload's first answer is read.
 void set_text_fonts(const hui::ui::Fonts &fonts);
 
+// The service's messages are written to fit in a sentence. Shown on their
+// own, they start with a capital: "the drive is busy" -> "The drive is busy".
+std::string sentence(std::string text);
 // "4.2 GB", "700 MB".
 std::string human_size(double bytes);
 // "1 h 05 min", "3 min 20 s".

@@ -18,10 +18,13 @@
 #endif
 
 #define SVC_DEFAULT_PORT 8790
+// Where the source lives: the credits' QR code, and how RipperPS introduces
+// itself to web services.
+#define RIPPER_SOURCE_URL "https://github.com/s0liton/RipperPS"
 // Where drive test results are sent: GitHub's new-issue page with the drive
 // report form (.github/ISSUE_TEMPLATE/drive-report.yml). The web UI adds the
 // form's fields to it.
-#define RIPPER_REPORT_FORM "https://github.com/s0liton/ripper/issues/new?template=drive-report.yml"
+#define RIPPER_REPORT_FORM "https://github.com/s0liton/RipperPS/issues/new?template=drive-report.yml"
 
 #define SVC_PATH 1024
 
@@ -58,6 +61,12 @@ void svc_pretty_label(const char *label, char *out, size_t n);
 int svc_is_id(const char *s);  // [a-z0-9_-]+, for ids from requests
 // Letters, digits and single dashes, for a file or folder name: "HL-DT-ST BD-RE" -> "HL-DT-ST-BD-RE".
 void svc_slug(const char *in, char *out, size_t n);
+// A file system is mounted at path: it's on another device than its parent.
+// (The PS5 keeps /mnt/usb0 to /mnt/usb6 whether a drive is plugged in or not.)
+int svc_is_mount(const char *path);
+// Runs of spaces as one, none at the ends: INQUIRY pads its fields
+// ("PS-SYSTEM   502R" -> "PS-SYSTEM 502R").
+void svc_squeeze(const char *in, char *out, size_t n);
 
 // JSON.
 const char *jstr(const cJSON *o, const char *k, const char *def);

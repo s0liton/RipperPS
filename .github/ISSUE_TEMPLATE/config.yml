@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
   - name: How to run a drive test
-    url: https://github.com/s0liton/ripper/blob/main/docs/drive-test.md
+    url: https://github.com/s0liton/RipperPS/blob/main/docs/drive-test.md
     about: The walkthrough for testing your drive and discs.

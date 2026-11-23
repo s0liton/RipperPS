@@ -32,4 +32,10 @@ int rip_unhex(const char *hex, uint8_t *out, size_t len);
 
 uint64_t rip_now_ms(void);
 
+// Splits a file into "<prefix>.0", "<prefix>.1"... of part bytes each, the
+// last holding the rest, and removes it. The first part is the file itself,
+// renamed and cut short, so only the rest is copied. RIP_OK, or RIP_ERR with
+// the file left whole.
+int rip_split_file(const char *path, uint64_t part, const char *prefix);
+
 #endif

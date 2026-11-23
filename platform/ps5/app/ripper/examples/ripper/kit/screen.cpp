@@ -53,6 +53,7 @@ namespace
 using gfx::Color;
 using gfx::Rect;
 using ripper::App;
+using ripper::sentence;
 
 const Color kWhite = Color::rgb(0xffffff);
 const Color kInk = Color::rgb(0x0b0d16);
@@ -77,21 +78,13 @@ constexpr const char *kTechniques[] = {
     "The kit's thirty themes, shared with RommPS",
 };
 
-// The service's errors are sentences in lower case; the screen's start with a capital.
-std::string sentence(std::string text)
-{
-    if (!text.empty())
-        text[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(text[0])));
-    return text;
-}
-
 // "12 min left", "" when it isn't known.
 std::string left(double eta)
 {
     return eta > 0 ? ripper::duration(eta) + " left" : "";
 }
 
-// A job's current stage in words: "Ripping", "Moving to This console", "Uploading to RomM".
+// A job's current stage in words: "Ripping", "Moving to Local Location", "Uploading to RomM".
 std::string stage_label(const ripper::Job &j)
 {
     if (j.stage == "transfer")
@@ -1134,7 +1127,7 @@ class RipperPS final : public app::Concept
             const ripper::Job &j = jobs[static_cast<std::size_t>(i)];
             const float y = top + (static_cast<float>(i) - scroll) * kRowH;
             ui::text(list, fonts.semibold, fonts.semibold.font->fit(j.name, 28, 1000), kMargin, y + 42, 28, L.text);
-            // "PlayStation  ·  CHD to This console  ·  Ripping"
+            // "PlayStation  ·  CHD to Local Location  ·  Ripping"
             std::string meta = j.system_name.empty() ? "" : j.system_name + "  \xC2\xB7  ";
             meta += j.format_label + (j.destination_name.empty() ? "" : " to " + j.destination_name) + "  \xC2\xB7  ";
             Color meta_colour = L.muted;

@@ -70,7 +70,8 @@ int http_do(const struct http_req *req, struct http_resp *resp) {
   curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, 10L);
   curl_easy_setopt(c, CURLOPT_TIMEOUT, req->timeout_s ? req->timeout_s : 60L);
   curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);
-  curl_easy_setopt(c, CURLOPT_USERAGENT, "ripper/" RIPPER_VERSION);
+  // Wikimedia turns away requests that don't say who they are.
+  curl_easy_setopt(c, CURLOPT_USERAGENT, "RipperPS/" RIPPER_VERSION " (" RIPPER_SOURCE_URL ")");
   curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, write_cb);
   curl_easy_setopt(c, CURLOPT_WRITEDATA, &s);
   if (!req->tls_verify) {

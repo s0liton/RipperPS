@@ -144,8 +144,8 @@ static void write_cue(const char *dir, const char *stem, const struct cd_track_s
       at += (size_t)snprintf(text + at, sizeof(text) - at, "REM SESSION %02u\r\n", s);
     }
     at += (size_t)snprintf(text + at, sizeof(text) - at,
-                           "FILE \"%s-%02zu.bin\" BINARY\r\n  TRACK %02zu %s\r\n    INDEX 01 00:00:00\r\n", stem,
-                           i + 1, i + 1, t[i].mode);
+                           "FILE \"%s-%02zu.bin\" BINARY\r\n  TRACK %02zu %s\r\n    INDEX 01 00:00:00\r\n", stem, i + 1,
+                           i + 1, t[i].mode);
   }
   snprintf(cue, cn, "%s/%s.cue", dir, stem);
   CHECK(write_bytes(cue, (const uint8_t *)text, at) == 0);
@@ -630,21 +630,29 @@ static void test_xiso(void) {
   rig_init(&g, img, len, MMC_PROFILE_DVD_ROM);
   CHECK(rig_go(&g) == RIP_OK);
   CHECK(g.disc.kind == RIP_DISC_XBOX && g.disc.xbox_partition);
-  // No unlock needed: the stock drive rips it, sector for sector.
+  // No unlock needed: the stock drive rips it. As an XISO (the default) it's
+  // cut after its last file; as an ISO it's the disc sector for sector.
   recipe = rip_default_recipe(&g.drive, &g.disc);
-  CHECK(recipe && recipe->id == RIP_RECIPE_ISO);
-  if (recipe) {
-    test_tmpdir(dir, sizeof(dir));
-    memset(&opts, 0, sizeof(opts));
-    opts.out_dir = dir;
-    opts.name = "Halo";
-    CHECK(rip_run(recipe, &g.drive, &g.reader, &g.disc, &opts, &res) == RIP_OK);
-    out = test_read_file(res.image_path, &got);
-    CHECK(out && got == len && !memcmp(out, img, len));
-    free(out);
-    remove(res.image_path);
-    remove(res.manifest_path);
-    rmdir(dir);
+  CHECK(recipe && recipe->id == RIP_RECIPE_XISO);
+  {
+    struct rip_choice choices[8];
+    size_t n = rip_plan(&g.drive, &g.disc, choices, 8);
+    size_t i;
+    for (i = 0; i < n; i++) {
+      int whole = choices[i].recipe->id == RIP_RECIPE_ISO;
+      test_tmpdir(dir, sizeof(dir));
+      memset(&opts, 0, sizeof(opts));
+      opts.out_dir = dir;
+      opts.name = "Halo";
+      CHECK(rip_run(choices[i].recipe, &g.drive, &g.reader, &g.disc, &opts, &res) == RIP_OK);
+      out = test_read_file(res.image_path, &got);
+      CHECK(out && (whole ? got == len : got > 33 * 2048 && got < len) && !memcmp(out, img, got));
+      free(out);
+      remove(res.image_path);
+      remove(res.manifest_path);
+      rmdir(dir);
+    }
+    CHECK(n == 2);
   }
   rig_done(&g);
   free(img);

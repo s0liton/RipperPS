@@ -231,7 +231,7 @@
    "title": "ripper payload",
    "author": "s0liton",
    "licence": "GPL-3.0; the libraries in it under their own, in licenses/payload/",
-   "url": "https://github.com/s0liton/ripper",
+   "url": "https://github.com/s0liton/RipperPS",
    "changes": "none: ripper's payload from the same build, which RipperPS starts when it isn't running",
    "licence_file": "licenses/GPL-3.0.txt",
    "comment": "Built by tools/ps5-build.sh."
