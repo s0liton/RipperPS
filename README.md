@@ -68,7 +68,7 @@ Note: Your privacy is fully preserved. No unique IDs about your console, drives,
 
 "Not yet" means I haven't been able to try it on a real disc. That's where your [drive reports](#help-us-test-send-a-drive-report) come in.
 
-##Experimental Notice
+## Experimental Notice
 
 This app is considered experimental and may have any number of problems. While it has worked really well in my personal day to day testing, I will need to refine the app more before I can say comfortably that you can let it watch your kids. Please help by reporting any bugs, and PLEASE submit drive tests as detailed above to help me confirm and support all the possible DVD players. 
   
@@ -82,7 +82,8 @@ I plan for the app to be out of experimental state by end of this year.
 
 ## Install
 
-RipperPS will be on ProsperoStore soon. Until then, it's a manual install.
+### Easiest
+Install it via the ProsperoStore or RecompStore on the PS5.
 
 ### Manual Install
 
