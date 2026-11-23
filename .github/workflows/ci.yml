@@ -15,7 +15,8 @@ jobs:
       - run: cmake -S . -B build/host -G Ninja
       - run: cmake --build build/host
       - run: cd build/host && ctest --output-on-failure
-      - run: cmake -S . -B build/asan -G Ninja -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
+      # The sanitizers' instrumentation sets off warnings the plain build doesn't have.
+      - run: cmake -S . -B build/asan -G Ninja -DRIPPER_WERROR=OFF -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
       - run: cmake --build build/asan
       - run: cd build/asan && ctest --output-on-failure
 

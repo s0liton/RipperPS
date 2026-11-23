@@ -80,7 +80,8 @@ else()
   find_library(ZSTD_LIBRARY zstd REQUIRED)
   target_link_libraries(ripper_core PUBLIC ZLIB::ZLIB ${ZSTD_LIBRARY} Threads::Threads)
 endif()
-target_compile_options(ripper_core PRIVATE -Wall -Wextra)
+# snprintf cutting a string to its buffer is meant, here and in the service.
+target_compile_options(ripper_core PRIVATE -Wall -Wextra -Wno-format-truncation)
 if(RIPPER_WERROR)
   target_compile_options(ripper_core PRIVATE -Werror)
 endif()
@@ -138,7 +139,7 @@ add_library(ripper_service STATIC
 )
 target_include_directories(ripper_service PUBLIC src/service third_party PRIVATE ${GEN})
 target_link_libraries(ripper_service PUBLIC ripper_core)
-target_compile_options(ripper_service PRIVATE -Wall -Wextra)
+target_compile_options(ripper_service PRIVATE -Wall -Wextra -Wno-format-truncation)
 # Network destinations, each when its library is there.
 find_package(PkgConfig QUIET)
 if(PKG_CONFIG_FOUND)

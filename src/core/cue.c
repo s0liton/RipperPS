@@ -187,12 +187,15 @@ static int parse_mode(const char *s, enum cd_track_mode *mode) {
   return RIP_OK;
 }
 
-static void resolve(const char *dir, const char *name, char *out, size_t len) {
+// RIP_ERR when the path doesn't fit.
+static int resolve(const char *dir, const char *name, char *out, size_t len) {
+  int n;
   if (name[0] == '/' || !dir || !dir[0]) {
-    snprintf(out, len, "%s", name);
+    n = snprintf(out, len, "%s", name);
   } else {
-    snprintf(out, len, "%s/%s", dir, name);
+    n = snprintf(out, len, "%s/%s", dir, name);
   }
+  return n < 0 || (size_t)n >= len ? RIP_ERR : RIP_OK;
 }
 
 int cue_parse(const char *text, size_t len, const char *dir, struct cue_sheet *out) {
@@ -247,7 +250,10 @@ int cue_parse(const char *text, size_t len, const char *dir, struct cue_sheet *o
         RIP_ERROR("cue line %u: only BINARY files are supported", line);
         goto done;
       }
-      resolve(dir, a, out->files[out->file_count], sizeof(out->files[0]));
+      if (resolve(dir, a, out->files[out->file_count], sizeof(out->files[0])) != RIP_OK) {
+        RIP_ERROR("cue line %u: the file's path is too long", line);
+        goto done;
+      }
       if (stat(out->files[out->file_count], &st) != 0) {
         RIP_ERROR("cue line %u: %s is missing", line, out->files[out->file_count]);
         goto done;

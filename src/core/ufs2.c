@@ -229,6 +229,21 @@ static int add_node(struct plan *p) {
   return p->count++;
 }
 
+// dir/name into out, which is another node's path than dir. RIP_ERR when it
+// doesn't fit.
+static int child_path(char *out, size_t len, const char *dir, const char *name) {
+  size_t dl = strlen(dir);
+  size_t nl = strlen(name);
+  if (dl + 1 + nl >= len) {
+    out[0] = 0;
+    return RIP_ERR;
+  }
+  memcpy(out, dir, dl);
+  out[dl] = '/';
+  memcpy(out + dl + 1, name, nl + 1);
+  return RIP_OK;
+}
+
 static int scan(struct plan *p, int dir) {
   DIR *d = opendir(p->nodes[dir].path);
   struct dirent *e;
@@ -253,7 +268,7 @@ static int scan(struct plan *p, int dir) {
     }
     n = &p->nodes[i];
     if (len > 255 ||
-        snprintf(n->path, sizeof(n->path), "%s/%s", p->nodes[dir].path, e->d_name) >= (int)sizeof(n->path) ||
+        child_path(n->path, sizeof(n->path), p->nodes[dir].path, e->d_name) != RIP_OK ||
         stat(n->path, &st) != 0 || (!S_ISDIR(st.st_mode) && !S_ISREG(st.st_mode))) {
       RIP_ERROR("ufs2: can't take %s/%s", p->nodes[dir].path, e->d_name);
       closedir(d);

@@ -147,6 +147,21 @@ static unsigned set_entries(const struct node *n) {
   return 2 + (n->name_len + 14) / 15;  // file, stream extension, names
 }
 
+// dir/name into out, which is another node's path than dir. RIP_ERR when it
+// doesn't fit.
+static int child_path(char *out, size_t len, const char *dir, const char *name) {
+  size_t dl = strlen(dir);
+  size_t nl = strlen(name);
+  if (dl + 1 + nl >= len) {
+    out[0] = 0;
+    return RIP_ERR;
+  }
+  memcpy(out, dir, dl);
+  out[dl] = '/';
+  memcpy(out + dl + 1, name, nl + 1);
+  return RIP_OK;
+}
+
 // Reads a directory's children into the plan, depth first.
 static int scan(struct plan *p, int dir) {
   DIR *d = opendir(p->nodes[dir].path);
@@ -170,9 +185,9 @@ static int scan(struct plan *p, int dir) {
       return RIP_ENOMEM;
     }
     n = &p->nodes[i];
-    if (snprintf(n->path, sizeof(n->path), "%s/%s", p->nodes[dir].path, e->d_name) >= (int)sizeof(n->path) ||
+    if (child_path(n->path, sizeof(n->path), p->nodes[dir].path, e->d_name) != RIP_OK ||
         stat(n->path, &st) != 0 || to_utf16(e->d_name, n->name, &n->name_len) != RIP_OK) {
-      RIP_ERROR("exfat: can't take %s", n->path);
+      RIP_ERROR("exfat: can't take %s/%s", p->nodes[dir].path, e->d_name);
       closedir(d);
       return RIP_ERR;
     }
